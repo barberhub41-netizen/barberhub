@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Para barbearias — BarberHub</title>
+<meta name="description" content="Receba agendamentos on-line, organize a agenda da equipe e apareça para quem procura barbearia na sua cidade." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-2a4 4 0 0 0-3-3.9"/><path d="M16.5 3.6a4 4 0 0 1 0 6.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8z"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13.5 13 21a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 2.6 12l.4-7a2 2 0 0 1 2-2l7-.4a2 2 0 0 1 1.5.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="4" y2="11"/><line x1="10" y1="20" x2="10" y2="5"/><line x1="16" y1="20" x2="16" y2="14"/><line x1="22" y1="20" x2="2" y2="20"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/></symbol>
+  <symbol id="i-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></symbol>
+</svg>
+
+<header class="top" id="topo"></header>
+
+<main>
+
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap hero-in">
+      <h1>Sua agenda cheia,<br />sem o telefone tocando.</h1>
+      <p class="sub">Receba agendamentos pela internet, organize a equipe e apareça para quem procura barbearia na sua cidade.</p>
+      <div><a class="btn btn-solid" href="estabelecimento.html">Cadastrar minha barbearia</a></div>
+      <p class="hero-foot">Cadastro gratuito. Você monta o perfil com calma e só entra no catálogo quando quiser.</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="head">
+        <h2>O que muda na sua rotina</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="goals">
+        <article class="goal">
+          <svg><use href="#i-clock"/></svg>
+          <h3>Menos tempo no telefone</h3>
+          <p>O cliente marca sozinho, vendo os horários que estão realmente livres. Você para de interromper o corte para atender ligação.</p>
+        </article>
+        <article class="goal">
+          <svg><use href="#i-block"/></svg>
+          <h3>Sem horário sobreposto</h3>
+          <p>Dois clientes não conseguem pegar o mesmo horário com o mesmo barbeiro. A trava é no sistema, não na memória de quem anota.</p>
+        </article>
+        <article class="goal">
+          <svg><use href="#i-pin"/></svg>
+          <h3>Encontrado por quem está perto</h3>
+          <p>Seu perfil entra na busca por cidade e bairro, com serviços, preços e horários que você mesmo cadastrou.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block alt">
+    <div class="wrap">
+      <div class="head">
+        <h2>O que você controla no painel</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><svg><use href="#i-calendar"/></svg><b>Agenda da equipe</b><i></i><span>Jornada, folga e bloqueio</span></div>
+        <div class="tile"><svg><use href="#i-users"/></svg><b>Cadastro de barbeiros</b><i></i><span>Cada um com sua agenda</span></div>
+        <div class="tile"><svg><use href="#i-tag"/></svg><b>Serviços e preços</b><i></i><span>Valor e duração</span></div>
+        <div class="tile"><svg><use href="#i-scissors"/></svg><b>Perfil da barbearia</b><i></i><span>Fotos, endereço e contato</span></div>
+        <div class="tile"><svg><use href="#i-bell"/></svg><b>Lembretes ao cliente</b><i></i><span>Reduz o não comparecimento</span></div>
+        <div class="tile"><svg><use href="#i-phone"/></svg><b>Funciona no celular</b><i></i><span>Sem instalar nada</span></div>
+        <div class="tile"><svg><use href="#i-chart"/></svg><b>Histórico de clientes</b><i></i><span>Quem voltou e quando</span></div>
+        <div class="tile"><svg><use href="#i-clock"/></svg><b>Rascunho e catálogo</b><i></i><span>Você decide quando aparecer</span></div>
+      </div>
+      <p class="note">A plataforma está em construção. A agenda, os lembretes e os relatórios entram nas próximas etapas — o cadastro do perfil já funciona.</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="head"><h2>Como começar</h2><div class="rule"></div></div>
+      <div class="steps">
+        <article class="step">
+          <div class="step-n">1</div>
+          <h3>Crie sua conta</h3>
+          <p>Nome, telefone e e-mail. É gratuito e leva menos de um minuto.</p>
+        </article>
+        <article class="step">
+          <div class="step-n">2</div>
+          <h3>Monte o perfil</h3>
+          <p>Nome da barbearia, endereço, contato e descrição. Pode salvar como rascunho e continuar depois.</p>
+        </article>
+        <article class="step">
+          <div class="step-n">3</div>
+          <h3>Entre no catálogo</h3>
+          <p>Quando estiver do seu jeito, mude a situação para “Disponível” e comece a aparecer na busca.</p>
+        </article>
+      </div>
+      <div class="center-cta"><a class="btn btn-solid" href="estabelecimento.html">Cadastrar minha barbearia</a></div>
+    </div>
+  </section>
+
+  <section class="block alt">
+    <div class="wrap">
+      <div class="head"><h2>Perguntas frequentes</h2><div class="rule"></div></div>
+      <div class="faq">
+        <div><h3>Preciso ter CNPJ?</h3><p>Não. O cadastro serve tanto para quem tem empresa aberta quanto para o barbeiro que trabalha por conta.</p></div>
+        <div><h3>Quanto custa?</h3><p>O cadastro e o perfil no catálogo são gratuitos. A cobrança e os planos entram só quando a plataforma estiver completa — e você será avisado antes.</p></div>
+        <div><h3>Sou obrigado a aparecer na busca?</h3><p>Não. Enquanto a situação estiver em “Rascunho”, só você vê o seu perfil. Nada aparece para o cliente sem a sua ação.</p></div>
+        <div><h3>Meus barbeiros vão ter acesso?</h3><p>Sim. Cada profissional poderá entrar e ver a própria agenda, sem acesso ao restante da gestão.</p></div>
+        <div><h3>E se eu quiser sair?</h3><p>Basta voltar a situação para “Rascunho” e seu perfil deixa de aparecer na busca na hora.</p></div>
+        <div><h3>Funciona no celular?</h3><p>Sim, tanto para você quanto para o cliente. É pelo navegador, sem instalar aplicativo.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip">
+    <div class="wrap">
+      <h2>Comece pelo cadastro</h2>
+      <p>Você monta o perfil no seu ritmo e decide quando entrar no catálogo.</p>
+      <a class="btn btn-white" href="estabelecimento.html">Cadastrar minha barbearia</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div>
+        <a class="logo" href="index.html">
+          <span class="logo-mark"><svg><use href="#i-scissors"/></svg></span>
+          <span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span>
+        </a>
+        <p class="foot-about">Plataforma de agendamento para barbearias e seus clientes.</p>
+      </div>
+      <div>
+        <h4>Cliente</h4>
+        <ul>
+          <li><a href="buscar.html">Buscar barbearia</a></li>
+          <li><a href="meus-agendamentos.html">Meus agendamentos</a></li>
+          <li><a href="cadastro.html">Criar conta</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Estabelecimento</h4>
+        <ul>
+          <li><a href="para-estabelecimentos.html">Vantagens</a></li>
+          <li><a href="estabelecimento.html">Cadastrar barbearia</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Ajuda</h4>
+        <ul>
+          <li><a href="index.html#duvidas">Perguntas frequentes</a></li>
+          <li><a href="index.html">Início</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bar">
+      <span>© 2026 BarberHub. Plataforma de agendamento.</span>
+      <span>Todos os direitos reservados.</span>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+import { montarTopo } from './app.js';
+montarTopo('estabelecimento');
+</script>
+
+</body>
+</html>

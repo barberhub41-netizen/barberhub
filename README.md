@@ -11,6 +11,7 @@ Site estático (HTML, CSS e JavaScript) com banco de dados e autenticação no S
 ```
 index.html                 início — página do cliente
 buscar.html                lista as barbearias disponíveis no catálogo
+para-estabelecimentos.html apresentação da plataforma para donos de barbearia
 barbearia.html             perfil de uma barbearia  (ainda não existe)
 entrar.html                login por e-mail/senha e Google
 cadastro.html              criação de conta de cliente

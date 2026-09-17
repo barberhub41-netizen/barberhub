@@ -65,7 +65,7 @@ export async function montarTopo(atual = '') {
       '<span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span></a>' +
       '<nav class="menu">' +
         '<a href="buscar.html"' + marca('buscar') + '>Barbearias</a>' +
-        '<a href="estabelecimento.html"' + marca('estabelecimento') + '>Sou estabelecimento</a>' +
+        '<a href="para-estabelecimentos.html"' + marca('estabelecimento') + '>Sou estabelecimento</a>' +
       '</nav>' +
       '<div class="top-cta">' + direita + '</div>' +
     '</div>';
