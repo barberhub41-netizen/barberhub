@@ -49,6 +49,7 @@ create table if not exists estabelecimentos (
   uf            char(2) not null,
   latitude      double precision,
   longitude     double precision,
+  logo_caminho  text,
   intervalo_min smallint not null default 30 check (intervalo_min in (10,15,20,30,60)),
   status        status_estabelecimento not null default 'rascunho',
   criado_em     timestamptz not null default now()

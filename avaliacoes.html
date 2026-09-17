@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Avaliações — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Avaliações</h1>
+    <p class="legenda">O que os clientes disseram. Você pode responder, mas não alterar a nota.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<div class="janela" id="janela" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" id="fechar" aria-label="Fechar">×</button>
+    <h2>Responder</h2>
+    <p class="legenda" id="j-quem"></p>
+    <div class="campo">
+      <label for="j-resposta">Sua resposta</label>
+      <textarea id="j-resposta" placeholder="Agradeça, explique ou convide a voltar. Fica visível para todos."></textarea>
+    </div>
+    <div class="aviso" id="j-aviso" role="status"></div>
+    <div class="acoes">
+      <button class="btn btn-solid" id="j-salvar">Publicar resposta</button>
+      <button class="btn btn-outline" id="j-cancelar">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, estrelas, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('avaliacoes.html');
+
+const conteudo = document.getElementById('conteudo');
+const janela   = document.getElementById('janela');
+const jResposta = document.getElementById('j-resposta');
+const jAviso   = document.getElementById('j-aviso');
+
+let avaliacoes = [];
+let alvo = null;
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  carregar();
+}
+
+async function carregar() {
+  conteudo.innerHTML = '<p class="carregando">Carregando...</p>';
+
+  const { data, error } = await sb.from('avaliacoes')
+    .select('id, nota, comentario, resposta, respondido_em, criado_em, barbeiros(nome), perfis(nome), agendamentos(inicio, agendamento_servicos(nome, ordem))')
+    .eq('estabelecimento_id', barbearia.id)
+    .order('criado_em', { ascending: false });
+
+  if (error) {
+    conteudo.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>';
+    return;
+  }
+
+  avaliacoes = data;
+
+  if (!data.length) {
+    conteudo.innerHTML = '<div class="vazio"><b>Nenhuma avaliação ainda</b>' +
+      '<p>O cliente pode avaliar depois que você marcar o atendimento como concluído na agenda.</p></div>';
+    return;
+  }
+
+  const media = data.reduce((t, a) => t + a.nota, 0) / data.length;
+  const semResposta = data.filter(a => !a.resposta).length;
+
+  // quantas de cada nota, para a distribuição
+  const contagem = [5, 4, 3, 2, 1].map(n => [n, data.filter(a => a.nota === n).length]);
+  const maior = Math.max(...contagem.map(c => c[1]), 1);
+
+  conteudo.innerHTML =
+    '<div class="nota-grande">' +
+      '<div><div class="valor">' + media.toFixed(1).replace('.', ',') + '</div>' +
+      estrelas(media) + '<span>' + data.length + (data.length === 1 ? ' avaliação' : ' avaliações') +
+      (semResposta ? ' · ' + semResposta + ' sem resposta' : '') + '</span></div>' +
+      '<div style="flex:1;min-width:200px">' +
+        contagem.map(([n, qtd]) =>
+          '<div class="dado" style="margin-bottom:8px"><div class="dado-topo" style="margin-bottom:4px">' +
+          '<b style="font-size:13px">' + n + ' estrela' + (n === 1 ? '' : 's') + '</b>' +
+          '<span>' + qtd + '</span></div>' +
+          '<div class="trilho" style="height:6px"><i style="width:' + (qtd / maior) * 100 + '%"></i></div></div>'
+        ).join('') +
+      '</div>' +
+    '</div>' +
+    data.map(cartao).join('');
+}
+
+function cartao(a) {
+  const itens = (a.agendamentos?.agendamento_servicos || []).sort((x, y) => x.ordem - y.ordem);
+  const quando = new Date(a.criado_em).toLocaleDateString('pt-BR');
+
+  return '<article class="avaliacao">' +
+    '<div class="avaliacao-topo">' +
+      '<div><b>' + escapar(a.perfis?.nome || 'Cliente') + '</b> ' + estrelas(a.nota) +
+      '<div class="servico">' + escapar(itens.map(i => i.nome).join(' + ') || 'Atendimento') +
+      (a.barbeiros?.nome ? ' · com ' + escapar(a.barbeiros.nome) : '') + '</div></div>' +
+      '<time>' + quando + '</time>' +
+    '</div>' +
+    (a.comentario ? '<p>' + escapar(a.comentario) + '</p>' : '') +
+    (a.resposta
+      ? '<div class="resposta"><b>Resposta da barbearia</b><p>' + escapar(a.resposta) + '</p></div>' +
+        '<div class="acoes" style="margin-top:12px"><button class="btn btn-outline" data-responder="' + a.id + '">Editar resposta</button></div>'
+      : '<div class="acoes" style="margin-top:12px"><button class="btn btn-solid" data-responder="' + a.id + '">Responder</button></div>') +
+  '</article>';
+}
+
+conteudo.addEventListener('click', (e) => {
+  const botao = e.target.closest('[data-responder]');
+  if (!botao) return;
+
+  alvo = avaliacoes.find(a => a.id === botao.dataset.responder);
+  if (!alvo) return;
+
+  jResposta.value = alvo.resposta || '';
+  jAviso.className = 'aviso';
+  document.getElementById('j-quem').textContent =
+    (alvo.perfis?.nome || 'Cliente') + ' · ' + alvo.nota + ' de 5';
+  janela.hidden = false;
+});
+
+document.getElementById('j-salvar').addEventListener('click', async () => {
+  if (!alvo) return;
+  const texto = jResposta.value.trim();
+  if (!texto) {
+    jAviso.textContent = 'Escreva a resposta.';
+    jAviso.className = 'aviso erro';
+    return;
+  }
+
+  const botao = document.getElementById('j-salvar');
+  botao.disabled = true;
+
+  const { error } = await sb.from('avaliacoes')
+    .update({ resposta: texto }).eq('id', alvo.id);
+
+  botao.disabled = false;
+
+  if (error) {
+    jAviso.textContent = 'Não foi possível salvar: ' + error.message;
+    jAviso.className = 'aviso erro';
+    return;
+  }
+
+  fechar();
+  carregar();
+});
+
+function fechar() { janela.hidden = true; alvo = null; }
+
+document.getElementById('fechar').addEventListener('click', fechar);
+document.getElementById('j-cancelar').addEventListener('click', fechar);
+janela.addEventListener('click', (e) => { if (e.target === janela) fechar(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !janela.hidden) fechar(); });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Relatórios — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Relatórios</h1>
+    <p class="legenda">O movimento da barbearia no período escolhido.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="barra">
+    <select id="periodo" class="entrada-data">
+      <option value="mes">Este mês</option>
+      <option value="anterior">Mês passado</option>
+      <option value="30">Últimos 30 dias</option>
+      <option value="7">Últimos 7 dias</option>
+      <option value="ano">Este ano</option>
+      <option value="livre">Escolher datas</option>
+    </select>
+    <span id="campos-livres" style="display:none;gap:12px" class="barra">
+      <input id="de" type="date" class="entrada-data" />
+      <input id="ate" type="date" class="entrada-data" />
+    </span>
+    <span id="intervalo" style="color:var(--muted);font-size:14px"></span>
+  </div>
+  <div id="painel"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, moeda, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('relatorios.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+function iniciar() {
+  const elPeriodo = document.getElementById('periodo');
+  const elLivres  = document.getElementById('campos-livres');
+  const elDe      = document.getElementById('de');
+  const elAte     = document.getElementById('ate');
+  const elInterv  = document.getElementById('intervalo');
+  const painel    = document.getElementById('painel');
+
+  const iso = (d) => d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+
+  const hoje = new Date();
+  elDe.value  = iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+  elAte.value = iso(hoje);
+
+  function faixa() {
+    const h = new Date();
+    switch (elPeriodo.value) {
+      case 'mes':
+        return [new Date(h.getFullYear(), h.getMonth(), 1), new Date(h.getFullYear(), h.getMonth() + 1, 0, 23, 59, 59)];
+      case 'anterior':
+        return [new Date(h.getFullYear(), h.getMonth() - 1, 1), new Date(h.getFullYear(), h.getMonth(), 0, 23, 59, 59)];
+      case 'ano':
+        return [new Date(h.getFullYear(), 0, 1), new Date(h.getFullYear(), 11, 31, 23, 59, 59)];
+      case '7':
+      case '30': {
+        const dias = Number(elPeriodo.value);
+        const de = new Date(h); de.setDate(de.getDate() - dias + 1); de.setHours(0, 0, 0, 0);
+        return [de, new Date(h.getFullYear(), h.getMonth(), h.getDate(), 23, 59, 59)];
+      }
+      default:
+        return [new Date(elDe.value + 'T00:00:00'), new Date(elAte.value + 'T23:59:59')];
+    }
+  }
+
+  async function carregar() {
+    painel.innerHTML = '<p class="carregando">Calculando...</p>';
+    const [de, ate] = faixa();
+
+    elInterv.textContent = de.toLocaleDateString('pt-BR') + ' a ' + ate.toLocaleDateString('pt-BR');
+
+    const { data, error } = await sb.from('agendamentos')
+      .select('id, inicio, fim, status, valor_centavos, assinatura_id, cliente_id, cliente_nome, cliente_telefone, agendamento_servicos(nome, preco_centavos, preco_cobrado_centavos, coberto), barbeiros(nome)')
+      .eq('estabelecimento_id', barbearia.id)
+      .gte('inicio', de.toISOString())
+      .lte('inicio', ate.toISOString());
+
+    if (error) {
+      painel.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>';
+      return;
+    }
+
+    if (!data.length) {
+      painel.innerHTML = '<div class="vazio"><b>Nenhum atendimento no período</b>' +
+        '<p>Escolha outro intervalo ou espere as primeiras marcações.</p></div>';
+      return;
+    }
+
+    // --------------------------------------------------------
+    // Números do topo
+    // --------------------------------------------------------
+    const concluidos = data.filter(a => a.status === 'concluido');
+    const faltas     = data.filter(a => a.status === 'faltou');
+    const cancelados = data.filter(a => a.status === 'cancelado');
+    const abertos    = data.filter(a => ['pendente', 'confirmado'].includes(a.status));
+
+    const faturado = concluidos.reduce((t, a) => t + (a.valor_centavos || 0), 0);
+    const aReceber = abertos.reduce((t, a) => t + (a.valor_centavos || 0), 0);
+    const ticket   = concluidos.length ? faturado / concluidos.length : 0;
+    const minutos  = concluidos.reduce((t, a) => t + (new Date(a.fim) - new Date(a.inicio)) / 60000, 0);
+
+    const fechados = concluidos.length + faltas.length;
+    const taxaFalta = fechados ? (faltas.length / fechados) * 100 : 0;
+
+    const porPlano = concluidos.filter(a => a.assinatura_id).length;
+    const descontos = concluidos.reduce((t, a) => {
+      const cheio = (a.agendamento_servicos || []).reduce((x, i) => x + (i.preco_centavos || 0), 0);
+      return t + Math.max(0, cheio - (a.valor_centavos || 0));
+    }, 0);
+
+    const pessoas = new Set(data.map(a =>
+      a.cliente_id || 'avulso:' + (a.cliente_telefone || a.cliente_nome || '')));
+
+    // --------------------------------------------------------
+    // Quebras
+    // --------------------------------------------------------
+    const porBarbeiro = agrupar(concluidos, a => a.barbeiros?.nome || 'Sem profissional');
+    // por serviço conta cada item, porque um atendimento pode ter vários
+    const porServico = (() => {
+      const m = new Map();
+      concluidos.forEach(a => (a.agendamento_servicos || []).forEach(i => {
+        if (!m.has(i.nome)) m.set(i.nome, { qtd: 0, valor: 0 });
+        const v = m.get(i.nome);
+        v.qtd++; v.valor += (i.preco_cobrado_centavos ?? i.preco_centavos) || 0;
+      }));
+      return [...m.entries()].sort((x, y) => y[1].valor - x[1].valor);
+    })();
+    const porDia      = agrupar(concluidos, a =>
+      ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date(a.inicio).getDay()]);
+
+    painel.innerHTML =
+      '<div class="kpis">' +
+        kpi('Faturamento', moeda(faturado), concluidos.length + ' atendimento' + (concluidos.length === 1 ? '' : 's') + ' concluído' + (concluidos.length === 1 ? '' : 's')) +
+        kpi('Ticket médio', moeda(ticket), 'por atendimento') +
+        kpi('Clientes atendidos', pessoas.size, 'pessoas distintas') +
+        kpi('Horas na cadeira', (minutos / 60).toFixed(1).replace('.', ',') + 'h', 'tempo de serviço concluído') +
+      '</div>' +
+
+      '<div class="kpis" style="margin-top:14px">' +
+        kpi('Ainda por atender', moeda(aReceber), abertos.length + ' marcado' + (abertos.length === 1 ? '' : 's') + ' no período', true) +
+        kpi('Não compareceu', faltas.length, taxaFalta.toFixed(1).replace('.', ',') + '% dos fechados', true) +
+        kpi('Cancelados', cancelados.length, 'desmarcados antes da hora', true) +
+        kpi('Total marcado', data.length, 'tudo que entrou na agenda', true) +
+        kpi('Pelo plano', porPlano, 'atendimentos de assinantes', true) +
+        kpi('Descontos dados', moeda(descontos), 'diferença para o preço de tabela', true) +
+      '</div>' +
+
+      '<div class="duas">' +
+        quebra('Por profissional', porBarbeiro) +
+        quebra('Por serviço', porServico) +
+      '</div>' +
+      quebra('Por dia da semana', porDia);
+  }
+
+  function agrupar(lista, chaveDe) {
+    const m = new Map();
+    lista.forEach(a => {
+      const k = chaveDe(a);
+      if (!m.has(k)) m.set(k, { qtd: 0, valor: 0 });
+      const v = m.get(k);
+      v.qtd++;
+      v.valor += a.valor_centavos || 0;
+    });
+    return [...m.entries()].sort((a, b) => b[1].valor - a[1].valor);
+  }
+
+  function kpi(titulo, valor, nota, calma = false) {
+    return '<div class="kpi' + (calma ? ' calma' : '') + '"><small>' + titulo + '</small>' +
+      '<b>' + valor + '</b><span>' + nota + '</span></div>';
+  }
+
+  function quebra(titulo, dados) {
+    if (!dados.length) {
+      return '<div class="quebra"><h3>' + titulo + '</h3>' +
+        '<p class="legenda">Nada concluído no período.</p></div>';
+    }
+    const maior = dados[0][1].valor || 1;
+    return '<div class="quebra"><h3>' + titulo + '</h3>' +
+      dados.map(([nome, v]) =>
+        '<div class="dado"><div class="dado-topo"><b>' + escapar(nome) + '</b>' +
+        '<span>' + moeda(v.valor) + ' · ' + v.qtd + 'x</span></div>' +
+        '<div class="trilho"><i style="width:' + Math.max(3, (v.valor / maior) * 100) + '%"></i></div></div>'
+      ).join('') + '</div>';
+  }
+
+  elPeriodo.addEventListener('change', () => {
+    elLivres.style.display = elPeriodo.value === 'livre' ? 'flex' : 'none';
+    if (elPeriodo.value !== 'livre') carregar();
+  });
+  elDe.addEventListener('change', carregar);
+  elAte.addEventListener('change', carregar);
+
+  carregar();
+}
+</script>
+
+</body>
+</html>

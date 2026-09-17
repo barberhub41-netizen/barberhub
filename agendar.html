@@ -26,8 +26,9 @@
 
   <div class="painel" style="max-width:760px;margin-top:28px">
     <div class="campo" style="margin-top:0">
-      <label for="servico">1. Serviço</label>
-      <select id="servico"></select>
+      <label>1. Serviços</label>
+      <div id="servico" class="escolhas"></div>
+      <p class="dica" id="total-servicos">Marque um ou mais. O tempo e o valor somam.</p>
     </div>
 
     <div class="campo">
@@ -54,7 +55,8 @@
 </template>
 
 <script type="module">
-import { sb, montarTopo, sessaoAtual, moeda, duracao, escapar } from './app.js';
+import { sb, montarTopo, sessaoAtual, moeda, duracao, escapar,
+         assinaturaDoCliente, aplicarPlano } from './app.js';
 
 montarTopo('buscar');
 
@@ -86,14 +88,19 @@ if (!slug) {
     if (!servicos.data?.length || !equipe.data?.length) {
       erro('Esta barbearia ainda não cadastrou serviços ou equipe.');
     } else {
+      const sessao = await sessaoAtual();
+      const assinatura = sessao
+        ? await assinaturaDoCliente(sessao.user.id, b.id)
+        : null;
+
       conteudo.innerHTML = '';
       conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
-      iniciar(b, servicos.data, equipe.data);
+      iniciar(b, servicos.data, equipe.data, assinatura);
     }
   }
 }
 
-function iniciar(barbearia, servicos, equipe) {
+function iniciar(barbearia, servicos, equipe, assinatura) {
   const elServico = document.getElementById('servico');
   const elProf    = document.getElementById('profissional');
   const elData    = document.getElementById('data');
@@ -112,8 +119,67 @@ function iniciar(barbearia, servicos, equipe) {
   const mostrar = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
 
   elServico.innerHTML = servicos.map(s =>
-    '<option value="' + s.id + '">' + escapar(s.nome) + ' — ' +
-    duracao(s.duracao_min) + ' · ' + moeda(s.preco_centavos) + '</option>').join('');
+    '<label class="escolha"><input type="checkbox" value="' + s.id + '" />' +
+    '<span><b>' + escapar(s.nome) + '</b>' +
+    '<small>' + duracao(s.duracao_min) + ' · ' + moeda(s.preco_centavos) + '</small></span></label>').join('');
+
+  // o primeiro já vem marcado, para a tela não abrir vazia
+  const primeiro = elServico.querySelector('input');
+  if (primeiro) primeiro.checked = true;
+
+  function escolhidos() {
+    return [...elServico.querySelectorAll('input:checked')]
+      .map(i => servicos.find(s => s.id === i.value))
+      .filter(Boolean);
+  }
+
+  const somaDuracao = () => escolhidos().reduce((t, s) => t + s.duracao_min, 0);
+  const somaPreco   = () => escolhidos().reduce((t, s) => t + s.preco_centavos, 0);
+
+  function comPlano() {
+    return aplicarPlano(escolhidos(), assinatura);
+  }
+
+  function somaCobrada() {
+    return comPlano().reduce((t, l) => t + l.preco, 0);
+  }
+
+  function atualizarTotal() {
+    const lista = escolhidos();
+    const alvo = document.getElementById('total-servicos');
+
+    if (!lista.length) {
+      alvo.innerHTML = 'Marque pelo menos um serviço.';
+      return;
+    }
+
+    const linhas = comPlano();
+    const cheio = somaPreco();
+    const cobrado = somaCobrada();
+
+    let detalhe = '';
+    if (assinatura) {
+      detalhe = '<div class="resumo-plano">' +
+        '<b>' + escapar(assinatura.plano.nome) + '</b>' +
+        linhas.map(l =>
+          '<div class="linha-preco"><span>' + escapar(l.servico.nome) + '</span>' +
+          '<span>' + (l.preco === 0 ? 'incluído' : moeda(l.preco)) +
+          (l.motivo ? ' <small>' + escapar(l.motivo) + '</small>' : '') + '</span></div>'
+        ).join('') +
+        (cobrado < cheio
+          ? '<div class="linha-preco economia"><span>Você economiza</span><span>' +
+            moeda(cheio - cobrado) + '</span></div>'
+          : '') +
+        '</div>';
+    }
+
+    alvo.innerHTML = lista.length + (lista.length === 1 ? ' serviço' : ' serviços') +
+      ' · ' + duracao(somaDuracao()) + ' · ' +
+      (cobrado < cheio
+        ? '<s style="color:var(--dim)">' + moeda(cheio) + '</s> <b style="color:var(--orange-2)">' + moeda(cobrado) + '</b>'
+        : moeda(cheio)) +
+      detalhe;
+  }
 
   elProf.innerHTML = equipe.map(p =>
     '<option value="' + p.id + '">' + escapar(p.nome) + '</option>').join('');
@@ -137,7 +203,11 @@ function iniciar(barbearia, servicos, equipe) {
     try {
       const g = JSON.parse(guardado);
       if (g.slug === barbearia.slug) {
-        if (servicos.some(s => s.id === g.servico)) elServico.value = g.servico;
+        if (Array.isArray(g.servicos)) {
+          elServico.querySelectorAll('input').forEach(i => {
+            i.checked = g.servicos.includes(i.value);
+          });
+        }
         if (equipe.some(p => p.id === g.profissional)) elProf.value = g.profissional;
         if (g.data >= elData.min) elData.value = g.data;
       }
@@ -153,9 +223,13 @@ function iniciar(barbearia, servicos, equipe) {
     confirmar.disabled = true;
     elHoras.innerHTML = '<p class="carregando" style="padding:20px 0">Procurando horários...</p>';
 
-    const servico = servicos.find(s => s.id === elServico.value);
     const dia = elData.value;
-    if (!servico || !dia) return;
+    const minutosTotal = somaDuracao();
+    atualizarTotal();
+    if (!minutosTotal || !dia) {
+      elHoras.innerHTML = '<p class="legenda" style="padding:14px 0">Marque ao menos um serviço.</p>';
+      return;
+    }
 
     const inicioDia = new Date(dia + 'T00:00:00');
     const fimDia    = new Date(dia + 'T23:59:59');
@@ -203,7 +277,7 @@ function iniciar(barbearia, servicos, equipe) {
       const fecha = new Date(dia + 'T' + String(j.hora_fim).slice(0, 8));
 
       for (let t = new Date(abre); t < fecha; t = new Date(t.getTime() + PASSO * 60000)) {
-        const termina = new Date(t.getTime() + servico.duracao_min * 60000);
+        const termina = new Date(t.getTime() + minutosTotal * 60000);
         if (termina > fecha) break;            // não cabe antes de fechar
         if (t <= agora) continue;              // horário já passou
         const conflita = marcados.some(([i, f]) => t < f && termina > i);
@@ -245,7 +319,7 @@ function iniciar(barbearia, servicos, equipe) {
       // guarda a escolha e manda fazer login; volta para cá depois
       sessionStorage.setItem('barberhub:agendamento', JSON.stringify({
         slug: barbearia.slug,
-        servico: elServico.value,
+        servicos: escolhidos().map(s => s.id),
         profissional: elProf.value,
         data: elData.value
       }));
@@ -254,22 +328,51 @@ function iniciar(barbearia, servicos, equipe) {
       return;
     }
 
-    const servico = servicos.find(s => s.id === elServico.value);
-    const fim = new Date(escolhido.getTime() + servico.duracao_min * 60000);
+    const lista = escolhidos();
+    if (!lista.length) return mostrar('Marque pelo menos um serviço.');
+
+    const fim = new Date(escolhido.getTime() + somaDuracao() * 60000);
 
     confirmar.disabled = true;
     confirmar.textContent = 'Confirmando...';
 
-    const { error } = await sb.from('agendamentos').insert({
+    const { data: criado, error } = await sb.from('agendamentos').insert({
       estabelecimento_id: barbearia.id,
       barbeiro_id: elProf.value,
-      servico_id: servico.id,
+      servico_id: lista[0].id,
       cliente_id: sessao.user.id,
       inicio: escolhido.toISOString(),
-      fim: fim.toISOString()
-    });
+      fim: fim.toISOString(),
+      valor_centavos: somaCobrada(),
+      assinatura_id: assinatura ? assinatura.id : null
+    }).select('id').single();
 
     confirmar.textContent = 'Confirmar agendamento';
+
+    if (!error) {
+      // grava os itens com nome, preço e duração do momento da marcação
+      const linhas = comPlano();
+      const itens = await sb.from('agendamento_servicos').insert(
+        linhas.map((l, i) => ({
+          agendamento_id: criado.id,
+          servico_id: l.servico.id,
+          nome: l.servico.nome,
+          preco_centavos: l.servico.preco_centavos,
+          preco_cobrado_centavos: l.preco,
+          coberto: l.coberto,
+          desconto_pct: l.desconto,
+          duracao_min: l.servico.duracao_min,
+          ordem: i
+        }))
+      );
+      if (itens.error) {
+        // sem os itens o agendamento fica sem sentido: desfaz
+        await sb.from('agendamentos').delete().eq('id', criado.id);
+        mostrar('Não foi possível registrar os serviços: ' + itens.error.message);
+        confirmar.disabled = false;
+        return;
+      }
+    }
 
     if (error) {
       // a trava do banco devolve erro quando alguém pegou o horário antes
@@ -285,6 +388,7 @@ function iniciar(barbearia, servicos, equipe) {
   });
 
   elServico.addEventListener('change', calcular);
+  atualizarTotal();
   elProf.addEventListener('change', calcular);
   elData.addEventListener('change', calcular);
   calcular();

@@ -28,6 +28,12 @@
             <input id="nome" type="text" placeholder="Barbearia do Zé" required />
           </div>
 
+          <div class="campo">
+            <label for="apelido_unidade">Apelido da unidade</label>
+            <input id="apelido_unidade" type="text" placeholder="Centro, Shopping, Matriz" />
+            <p class="dica">Só aparece para você, para diferenciar as unidades no painel.</p>
+          </div>
+
           <div class="campo larga">
             <label for="descricao">Descrição</label>
             <textarea id="descricao" placeholder="Conte em poucas linhas o que a sua barbearia tem de diferente."></textarea>
@@ -95,6 +101,7 @@
         <div class="acoes">
           <button class="btn btn-solid" type="submit" id="salvar">Salvar</button>
           <a class="btn btn-outline" id="ver" href="#" style="display:none">Ver na busca</a>
+          <button class="btn btn-outline" type="button" id="nova-unidade" style="display:none">+ Nova unidade</button>
         </div>
       </form>
     </div>
@@ -102,18 +109,18 @@
 </main>
 
 <script type="module">
-import { sb, montarTopo, exigirLogin, apelido, escapar, subnav } from './app.js';
+import { sb, montarTopo, exigirLogin, apelido, escapar, montarPainel, minhasBarbearias } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
-document.getElementById('menu').innerHTML = subnav('estabelecimento.html');
+const ativa = await montarPainel('estabelecimento.html');
 
 const form   = document.getElementById('form');
 const aviso  = document.getElementById('aviso');
 const salvar = document.getElementById('salvar');
 const ver    = document.getElementById('ver');
 
-const campos = ['nome','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','intervalo_min','status'];
+const campos = ['nome','apelido_unidade','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','intervalo_min','status'];
 const el = (id) => document.getElementById(id);
 
 let existente = null;
@@ -126,11 +133,17 @@ function mostrar(texto, tipo = 'erro') {
 // ------------------------------------------------------------
 // Carrega o estabelecimento do usuário, se já houver
 // ------------------------------------------------------------
-const { data, error } = await sb
-  .from('estabelecimentos')
-  .select('*')
-  .eq('dono_id', sessao.user.id)
-  .maybeSingle();
+const novaUnidade = new URLSearchParams(location.search).get('nova') === '1';
+
+const { data, error } = ativa && !novaUnidade
+  ? await sb.from('estabelecimentos').select('*').eq('id', ativa.id).maybeSingle()
+  : { data: null, error: null };
+
+if (novaUnidade) {
+  document.getElementById('titulo').textContent = 'Nova unidade';
+  document.getElementById('legenda').textContent =
+    'Cada unidade tem endereço, equipe, serviços e agenda próprios.';
+}
 
 if (error) {
   mostrar('Não foi possível carregar: ' + error.message);
@@ -146,7 +159,12 @@ if (error) {
     ver.href = 'buscar.html?cidade=' + encodeURIComponent(data.cidade || '');
     ver.style.display = '';
   }
+  document.getElementById('nova-unidade').style.display = '';
 }
+
+document.getElementById('nova-unidade').addEventListener('click', () => {
+  location.href = 'estabelecimento.html?nova=1';
+});
 
 // ------------------------------------------------------------
 // Salvar
@@ -182,6 +200,11 @@ form.addEventListener('submit', async (e) => {
     // o slug entra na URL do perfil; o sufixo evita nomes repetidos
     valores.slug = apelido(valores.nome) + '-' + Math.random().toString(36).slice(2, 7);
     valores.dono_id = sessao.user.id;
+
+    // a primeira é a principal; as seguintes viram filiais dela
+    const minhas = await minhasBarbearias(sessao);
+    const principal = minhas.find(b => !b.matriz_id);
+    if (principal) valores.matriz_id = principal.id;
     resposta = await sb
       .from('estabelecimentos')
       .insert(valores)
@@ -198,6 +221,7 @@ form.addEventListener('submit', async (e) => {
   }
 
   existente = resposta.data;
+  try { localStorage.setItem('barberhub:unidade', existente.id); } catch (e) { /* ignora */ }
   mostrar(
     existente.status === 'disponivel'
       ? 'Salvo. Sua barbearia já aparece na busca.'

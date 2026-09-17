@@ -93,17 +93,16 @@
 </div>
 
 <script type="module">
-import { sb, montarTopo, exigirLogin, subnav, minhaBarbearia, moeda, escapar } from './app.js';
+import { sb, montarTopo, exigirLogin, montarPainel, moeda, escapar } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
-document.getElementById('menu').innerHTML = subnav('agenda.html');
+const barbearia = await montarPainel('agenda.html');
 
 const PX_MIN = 1.5;    // altura de um minuto, em pixels
 const SNAP   = 5;      // arrastar encaixa de 5 em 5 minutos
 
 const conteudo  = document.getElementById('conteudo');
-const barbearia = await minhaBarbearia(sessao);
 
 if (!barbearia) {
   conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
@@ -194,7 +193,7 @@ function iniciar(equipe, servicos) {
 
     const [ag, jo, bl] = await Promise.all([
       sb.from('agendamentos')
-        .select('id, inicio, fim, status, barbeiro_id, servico_id, cliente_nome, cliente_telefone, servicos(nome, preco_centavos), perfis(nome, telefone)')
+        .select('id, inicio, fim, status, barbeiro_id, servico_id, valor_centavos, assinatura_id, cliente_nome, cliente_telefone, agendamento_servicos(nome, ordem, coberto), perfis(nome, telefone)')
         .eq('estabelecimento_id', barbearia.id)
         .gte('inicio', de.toISOString()).lte('inicio', ate.toISOString())
         .order('inicio'),
@@ -308,7 +307,7 @@ function iniciar(equipe, servicos) {
         dentro += '<div class="bloco ' + a.status + '" data-id="' + a.id + '" ' +
           'style="top:' + topo(minutosDoDia(i)) + 'px;height:' + Math.max(22, dur * PX_MIN - 2) + 'px">' +
           '<b>' + hhmm(i) + ' ' + escapar(cliente) + '</b>' +
-          '<span>' + escapar(a.servicos?.nome || '') + ' · ' + dur + ' min</span>' +
+          '<span>' + escapar(nomeServicos(a)) + ' · ' + dur + ' min</span>' +
           '<div class="puxador"></div></div>';
       });
 
@@ -322,12 +321,18 @@ function iniciar(equipe, servicos) {
       colunas + '</div>';
 
     const ativos = dados.filter(a => !['cancelado', 'faltou'].includes(a.status));
-    const soma = ativos.reduce((t, a) => t + (a.servicos?.preco_centavos || 0), 0);
+    const soma = ativos.reduce((t, a) => t + (a.valor_centavos || 0), 0);
     elResumo.textContent = ativos.length + ' atendimento' + (ativos.length === 1 ? '' : 's') +
       ' · ' + moeda(soma);
 
     ligarArraste();
   }
+
+  const nomeServicos = (a) => {
+    const itens = (a.agendamento_servicos || []).sort((x, y) => x.ordem - y.ordem);
+    if (!itens.length) return 'Serviço';
+    return itens.map(i => i.nome + (i.coberto ? ' (plano)' : '')).join(' + ');
+  };
 
   const faixaFora = (topo, altura) =>
     '<div class="fora" style="top:' + topo + 'px;height:' + altura + 'px"></div>';
@@ -481,9 +486,19 @@ function iniciar(equipe, servicos) {
         barbeiro_id: jProf.value, servico_id: servico.id,
         inicio: inicio.toISOString(), fim: fim.toISOString(),
         status: jStatus.value,
+        valor_centavos: servico.preco_centavos,
         cliente_nome: jNome.value.trim() || null,
         cliente_telefone: jFone.value.trim() || null
       }).eq('id', editando));
+
+      if (!error) {
+        // refaz os itens do atendimento com o serviço escolhido
+        await sb.from('agendamento_servicos').delete().eq('agendamento_id', editando);
+        await sb.from('agendamento_servicos').insert({
+          agendamento_id: editando, servico_id: servico.id, nome: servico.nome,
+          preco_centavos: servico.preco_centavos, duracao_min: minutos, ordem: 0
+        });
+      }
     } else {
       if (!jNome.value.trim()) {
         jAviso.textContent = 'Informe o nome do cliente.';
@@ -491,15 +506,29 @@ function iniciar(equipe, servicos) {
         jSalvar.disabled = false;
         return;
       }
-      ({ error } = await sb.from('agendamentos').insert({
+      const criado = await sb.from('agendamentos').insert({
         estabelecimento_id: barbearia.id,
         barbeiro_id: jProf.value,
         servico_id: servico.id,
         inicio: inicio.toISOString(), fim: fim.toISOString(),
         status: jStatus.value,
+        valor_centavos: servico.preco_centavos,
         cliente_nome: jNome.value.trim(),
         cliente_telefone: jFone.value.trim() || null
-      }));
+      }).select('id').single();
+
+      error = criado.error;
+
+      if (!error) {
+        const itens = await sb.from('agendamento_servicos').insert({
+          agendamento_id: criado.data.id, servico_id: servico.id, nome: servico.nome,
+          preco_centavos: servico.preco_centavos, duracao_min: minutos, ordem: 0
+        });
+        if (itens.error) {
+          await sb.from('agendamentos').delete().eq('id', criado.data.id);
+          error = itens.error;
+        }
+      }
     }
 
     jSalvar.disabled = false;

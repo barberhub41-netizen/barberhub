@@ -15,6 +15,11 @@ para-estabelecimentos.html apresentação da plataforma para donos de barbearia
 barbearia.html             perfil público de uma barbearia
 agendar.html               marcação de horário pelo cliente
 jornadas.html              jornada, pausas e bloqueios de cada barbeiro
+fotos.html                 upload da logo e das fotos
+avaliacoes.html            avaliações recebidas, com resposta
+planos.html                planos de assinatura, assinantes e fidelidade
+clientes.html              clientes da barbearia, consolidados
+relatorios.html            faturamento, faltas e quebras por período
 agenda.html                agenda do dia em calendário, com encaixe
 servicos.html              cadastro de serviços do estabelecimento
 barbeiros.html             cadastro da equipe
@@ -31,6 +36,10 @@ sql/conferencia.sql        consulta que confere se o banco está completo
 sql/migracao-01-intervalo.sql  intervalo entre horários (rodar uma vez)
 sql/migracao-02-encaixe.sql    cliente sem conta, para encaixe (rodar uma vez)
 sql/migracao-03-bloqueios.sql  almoço, pausa, folga e férias (rodar uma vez)
+sql/migracao-04-imagens.sql    bucket, logo e fotos (rodar uma vez)
+sql/migracao-05-filiais-servicos-avaliacoes.sql  filiais, vários serviços,
+                               avaliações, planos e fidelidade (rodar uma vez)
+sql/migracao-06-planos-configuraveis.sql  cota por serviço e descontos
 ```
 
 ---
@@ -67,6 +76,10 @@ nesta ordem:
 1. `schema.sql` — cria as tabelas
 2. `permissoes.sql` — cria as regras de acesso
 3. `conferencia.sql` — confere; deve retornar 8 linhas
+4. as migrações `migracao-01` a `migracao-04`, em ordem
+
+As migrações dependem das funções criadas em `permissoes.sql`, então esse
+arquivo tem de rodar antes delas.
 
 Todos podem ser executados mais de uma vez sem duplicar nada.
 
@@ -81,6 +94,13 @@ Todos podem ser executados mais de uma vez sem duplicar nada.
 | `jornadas` | horário de trabalho por barbeiro e dia da semana |
 | `agendamentos` | quem, com quem, quando e em que status |
 | `bloqueios` | almoço, pausa, folga, férias e feriado |
+| `fotos` | fotos da vitrine, em ordem |
+| `agendamento_servicos` | os serviços de cada atendimento, com preço fechado |
+| `avaliacoes` | nota e comentário do cliente, com resposta da barbearia |
+| `planos` | planos de assinatura da barbearia |
+| `assinaturas` | quem assinou qual plano |
+| `plano_itens` | o que cada plano cobre, serviço a serviço |
+| `fidelidade` | regra do cartão de pontos |
 
 Decisões que valem lembrar:
 
@@ -89,6 +109,10 @@ Decisões que valem lembrar:
 - **O banco recusa horário duplo**: a restrição `agendamentos_sem_conflito`
   impede dois atendimentos sobrepostos no mesmo barbeiro.
 - **Agendamento não se apaga**, cancela — o status vira `cancelado`.
+- **Preço e duração ficam congelados** em `agendamento_servicos` no momento da
+  marcação: mudar a tabela de preços não reescreve o histórico.
+- **Filial é um estabelecimento** com `matriz_id` apontando para a unidade
+  principal. Cada uma tem endereço, equipe, serviços e agenda próprios.
 - **Catálogo aberto**: quem não está logado vê os estabelecimentos com status
   `disponivel`. Em `rascunho`, só o dono enxerga.
 
@@ -110,14 +134,14 @@ site. Ela ignora o RLS e dá acesso total ao banco.
 - [x] 1. Banco de dados real
 - [x] 2. Login e perfis de acesso
 - [x] 3. Cadastro do estabelecimento *(dados básicos; faltam redes sociais e pagamento)*
-- [ ] 4. Upload de logo e fotos
-- [x] 5. Perfil individual da barbearia *(faltam fotos e mapa)*
+- [x] 4. Upload de logo e fotos
+- [x] 5. Perfil individual da barbearia *(falta o mapa)*
 - [x] 6. Disponibilização no catálogo *(rascunho / disponível)*
 - [x] 7. Busca real *(falta filtro por serviço e distância)*
 - [x] 8. Agenda *(jornada, pausas, folgas e férias por barbeiro)*
 - [x] 9. Agendamento do cliente *(marcar e cancelar; falta remarcar)*
 - [x] 10. Painel do estabelecimento *(agenda, serviços, equipe, horários; faltam relatórios)*
-- [ ] 11. Funcionalidades de gestão
+- [~] 11. Funcionalidades de gestão *(clientes, relatórios, avaliações, planos e fidelidade; faltam lembretes, promoções, comandas, estoque e comissões)*
 - [ ] 12. Aplicativo instalável
 - [ ] 13. Testes completos
 - [ ] 14. Pagamentos

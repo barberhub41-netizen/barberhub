@@ -17,33 +17,76 @@
   <div class="wrap">
     <h1>Meus agendamentos</h1>
     <p class="legenda" id="legenda">Seus horários marcados e o histórico de atendimentos.</p>
+    <div id="assinaturas"></div>
     <div id="lista"><p class="carregando">Carregando...</p></div>
   </div>
 </main>
 
+<div class="janela" id="janela" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" id="fechar" aria-label="Fechar">×</button>
+    <h2>Como foi o atendimento?</h2>
+    <p class="legenda" id="j-onde"></p>
+
+    <div class="campo">
+      <label>Sua nota</label>
+      <div class="escolher-nota" id="notas">
+        <button type="button" data-nota="1">★</button>
+        <button type="button" data-nota="2">★</button>
+        <button type="button" data-nota="3">★</button>
+        <button type="button" data-nota="4">★</button>
+        <button type="button" data-nota="5">★</button>
+      </div>
+    </div>
+
+    <div class="campo">
+      <label for="j-comentario">Comentário</label>
+      <textarea id="j-comentario" placeholder="Opcional. Conte o que achou."></textarea>
+    </div>
+
+    <div class="aviso" id="j-aviso" role="status"></div>
+
+    <div class="acoes">
+      <button class="btn btn-solid" id="j-enviar">Enviar avaliação</button>
+      <button class="btn btn-outline" id="j-cancelar">Agora não</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
-import { sb, montarTopo, exigirLogin, quando, moeda, escapar } from './app.js';
+import { sb, montarTopo, exigirLogin, quando, moeda, escapar, estrelas,
+         assinaturaDoCliente } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('');
 
 const lista = document.getElementById('lista');
+let ultimos = [];
 
 function cartao(a, futuro) {
-  const servico = a.servicos?.nome || 'Serviço';
+  const itens = (a.agendamento_servicos || []).sort((x, y) => x.ordem - y.ordem);
+  const servico = itens.length ? itens.map(i => i.nome).join(' + ') : 'Serviço';
   const barbeiro = a.barbeiros?.nome || '';
   const local = a.estabelecimentos?.nome || '';
   const podeCancelar = futuro && ['pendente', 'confirmado'].includes(a.status);
+  const avaliacao = (a.avaliacoes || [])[0];
+  const podeAvaliar = a.status === 'concluido';
 
   return '<article class="agend">' +
     '<div class="quando"><b>' + quando(a.inicio) + '</b>' +
       '<span>' + escapar(local) + '</span></div>' +
     '<div class="oque"><b>' + escapar(servico) + '</b>' +
       '<span>' + (barbeiro ? 'com ' + escapar(barbeiro) : '') +
-      (a.servicos ? ' · ' + moeda(a.servicos.preco_centavos) : '') + '</span></div>' +
+      (a.valor_centavos ? ' · ' + moeda(a.valor_centavos) : '') + '</span></div>' +
     '<span class="selo ' + a.status + '">' + a.status + '</span>' +
     (podeCancelar
       ? '<button class="btn btn-outline" data-cancelar="' + a.id + '">Cancelar</button>'
+      : '') +
+    (podeAvaliar
+      ? (avaliacao
+          ? '<span title="Sua nota">' + estrelas(avaliacao.nota) + '</span>' +
+            '<button class="btn btn-outline" data-avaliar="' + a.id + '">Editar nota</button>'
+          : '<button class="btn btn-solid" data-avaliar="' + a.id + '">Avaliar</button>')
       : '') +
   '</article>';
 }
@@ -53,7 +96,7 @@ async function carregar() {
 
   const { data, error } = await sb
     .from('agendamentos')
-    .select('id, inicio, fim, status, servicos(nome, preco_centavos), barbeiros(nome), estabelecimentos(nome, cidade)')
+    .select('id, inicio, fim, status, valor_centavos, estabelecimento_id, barbeiro_id, agendamento_servicos(nome, ordem), barbeiros(nome), estabelecimentos(nome, cidade), avaliacoes(id, nota, comentario)')
     .eq('cliente_id', sessao.user.id)
     .order('inicio', { ascending: false });
 
@@ -71,6 +114,8 @@ async function carregar() {
       '</div>';
     return;
   }
+
+  ultimos = data;
 
   const agora = new Date();
   const futuros = data.filter(a => new Date(a.inicio) >= agora).reverse();
@@ -108,6 +153,131 @@ lista.addEventListener('click', async (e) => {
   }
   carregar();
 });
+
+// ------------------------------------------------------------
+// Avaliação
+// ------------------------------------------------------------
+const janela = document.getElementById('janela');
+const notas  = document.getElementById('notas');
+const jAviso = document.getElementById('j-aviso');
+const jComentario = document.getElementById('j-comentario');
+let alvo = null;   // agendamento em avaliação
+let nota = 0;
+
+function pintar() {
+  notas.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('cheia', Number(b.dataset.nota) <= nota);
+  });
+}
+
+notas.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-nota]');
+  if (!b) return;
+  nota = Number(b.dataset.nota);
+  pintar();
+  jAviso.className = 'aviso';
+});
+
+function fechar() { janela.hidden = true; alvo = null; }
+
+document.getElementById('fechar').addEventListener('click', fechar);
+document.getElementById('j-cancelar').addEventListener('click', fechar);
+janela.addEventListener('click', (e) => { if (e.target === janela) fechar(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !janela.hidden) fechar(); });
+
+lista.addEventListener('click', (e) => {
+  const botao = e.target.closest('[data-avaliar]');
+  if (!botao) return;
+
+  alvo = ultimos.find(a => a.id === botao.dataset.avaliar);
+  if (!alvo) return;
+
+  const anterior = (alvo.avaliacoes || [])[0];
+  nota = anterior?.nota || 0;
+  jComentario.value = anterior?.comentario || '';
+  jAviso.className = 'aviso';
+  document.getElementById('j-onde').textContent =
+    (alvo.estabelecimentos?.nome || '') + ' · ' + quando(alvo.inicio);
+  pintar();
+  janela.hidden = false;
+});
+
+document.getElementById('j-enviar').addEventListener('click', async () => {
+  if (!alvo) return;
+  if (!nota) {
+    jAviso.textContent = 'Escolha de 1 a 5 estrelas.';
+    jAviso.className = 'aviso erro';
+    return;
+  }
+
+  const botao = document.getElementById('j-enviar');
+  botao.disabled = true;
+
+  const anterior = (alvo.avaliacoes || [])[0];
+  const comentario = jComentario.value.trim() || null;
+  let error;
+
+  if (anterior) {
+    ({ error } = await sb.from('avaliacoes')
+      .update({ nota, comentario }).eq('id', anterior.id));
+  } else {
+    ({ error } = await sb.from('avaliacoes').insert({
+      agendamento_id: alvo.id,
+      estabelecimento_id: alvo.estabelecimento_id,
+      barbeiro_id: alvo.barbeiro_id,
+      cliente_id: sessao.user.id,
+      nota, comentario
+    }));
+  }
+
+  botao.disabled = false;
+
+  if (error) {
+    jAviso.textContent = 'Não foi possível enviar: ' + error.message;
+    jAviso.className = 'aviso erro';
+    return;
+  }
+
+  fechar();
+  carregar();
+});
+
+// assinaturas ativas do cliente
+(async () => {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const { data } = await sb.from('assinaturas')
+    .select('id, inicio, fim, status, estabelecimento_id, planos(nome, preco_centavos, usos_por_periodo), estabelecimentos(nome, slug)')
+    .eq('cliente_id', sessao.user.id)
+    .eq('status', 'ativa');
+
+  const validas = (data || []).filter(a => !a.fim || a.fim >= hoje);
+  if (!validas.length) return;
+
+  // quanto ainda cabe no ciclo de cada assinatura
+  for (const a of validas) {
+    const detalhe = await assinaturaDoCliente(sessao.user.id, a.estabelecimento_id);
+    if (!detalhe) continue;
+    const teto = detalhe.plano.usos_por_periodo;
+    a.saldo = teto
+      ? ' · ' + Math.max(0, teto - detalhe.totalUsado) + ' de ' + teto + ' no ciclo'
+      : ' · sem teto no ciclo';
+  }
+
+  document.getElementById('assinaturas').innerHTML =
+    '<h2 class="secao-titulo">Suas assinaturas</h2>' +
+    validas.map(a =>
+      '<article class="agend">' +
+      '<div class="oque"><b>' + escapar(a.planos?.nome || 'Plano') + '</b>' +
+      '<span>' + escapar(a.estabelecimentos?.nome || '') +
+      (a.saldo || '') +
+      (a.fim ? ' · vale até ' + new Date(a.fim + 'T12:00:00').toLocaleDateString('pt-BR') : '') +
+      '</span></div>' +
+      '<span class="selo confirmado">ativa</span>' +
+      (a.estabelecimentos?.slug
+        ? '<a class="btn btn-outline" href="agendar.html?slug=' + encodeURIComponent(a.estabelecimentos.slug) + '">Agendar</a>'
+        : '') +
+      '</article>').join('');
+})();
 
 carregar();
 </script>

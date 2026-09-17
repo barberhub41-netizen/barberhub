@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fotos — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Logo e fotos</h1>
+    <p class="legenda">A imagem que o cliente vê na busca e no seu perfil.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="painel" style="max-width:760px">
+    <h2 class="secao-titulo" style="margin-top:0">Logo</h2>
+    <div class="enviar">
+      <span class="previa" id="previa-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>
+      </span>
+      <div style="flex:1;min-width:240px">
+        <input type="file" id="arquivo-logo" accept="image/jpeg,image/png,image/webp" />
+        <p class="dica" style="color:var(--dim);font-size:12.5px;margin-top:8px">
+          Quadrada fica melhor, porque ela aparece dentro de um círculo. Até 5 MB.
+        </p>
+        <div class="barra-progresso" id="progresso-logo"><i></i></div>
+      </div>
+      <button class="btn btn-perigo" id="remover-logo" style="display:none">Remover</button>
+    </div>
+    <div class="aviso" id="aviso-logo" role="status"></div>
+  </div>
+
+  <div class="painel" style="max-width:760px;margin-top:18px">
+    <h2 class="secao-titulo" style="margin-top:0">Fotos da barbearia</h2>
+    <p class="legenda" style="margin-bottom:16px">Ambiente, cadeiras, trabalhos feitos. Aparecem no seu perfil.</p>
+    <input type="file" id="arquivo-fotos" accept="image/jpeg,image/png,image/webp" multiple />
+    <div class="barra-progresso" id="progresso-fotos"><i></i></div>
+    <div class="aviso" id="aviso-fotos" role="status"></div>
+    <div class="galeria" id="galeria"></div>
+  </div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel,
+         BUCKET, urlImagem, conferirImagem, extensaoDe, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('fotos.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<p>As imagens pertencem a um estabelecimento.</p>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+function iniciar() {
+  const previa       = document.getElementById('previa-logo');
+  const arqLogo      = document.getElementById('arquivo-logo');
+  const avisoLogo    = document.getElementById('aviso-logo');
+  const progLogo     = document.getElementById('progresso-logo');
+  const removerLogo  = document.getElementById('remover-logo');
+
+  const arqFotos     = document.getElementById('arquivo-fotos');
+  const avisoFotos   = document.getElementById('aviso-fotos');
+  const progFotos    = document.getElementById('progresso-fotos');
+  const galeria      = document.getElementById('galeria');
+
+  let logoAtual = barbearia.logo_caminho || null;
+
+  const dizer = (el, texto, tipo = 'erro') => { el.textContent = texto; el.className = 'aviso ' + tipo; };
+
+  // ----------------------------------------------------------
+  // Logo
+  // ----------------------------------------------------------
+  function desenharLogo() {
+    if (logoAtual) {
+      previa.innerHTML = '<img src="' + urlImagem(logoAtual) + '" alt="Logo da barbearia" />';
+      removerLogo.style.display = '';
+    } else {
+      removerLogo.style.display = 'none';
+    }
+  }
+
+  arqLogo.addEventListener('change', async () => {
+    const arquivo = arqLogo.files[0];
+    const problema = conferirImagem(arquivo);
+    if (problema) return dizer(avisoLogo, problema);
+
+    progLogo.classList.add('ativa');
+    avisoLogo.className = 'aviso';
+
+    const caminho = barbearia.id + '/logo-' + Date.now() + '.' + extensaoDe(arquivo);
+    const envio = await sb.storage.from(BUCKET).upload(caminho, arquivo, { upsert: true });
+
+    if (envio.error) {
+      progLogo.classList.remove('ativa');
+      return dizer(avisoLogo, 'Não foi possível enviar: ' + envio.error.message);
+    }
+
+    const { error } = await sb.from('estabelecimentos')
+      .update({ logo_caminho: caminho }).eq('id', barbearia.id);
+
+    progLogo.classList.remove('ativa');
+
+    if (error) return dizer(avisoLogo, 'Enviou o arquivo, mas não salvou no cadastro: ' + error.message);
+
+    // apaga a logo anterior para não acumular lixo no armazenamento
+    if (logoAtual && logoAtual !== caminho) {
+      await sb.storage.from(BUCKET).remove([logoAtual]);
+    }
+
+    logoAtual = caminho;
+    arqLogo.value = '';
+    desenharLogo();
+    dizer(avisoLogo, 'Logo atualizada.', 'ok');
+  });
+
+  removerLogo.addEventListener('click', async () => {
+    if (!confirm('Remover a logo?')) return;
+    removerLogo.disabled = true;
+
+    await sb.from('estabelecimentos').update({ logo_caminho: null }).eq('id', barbearia.id);
+    if (logoAtual) await sb.storage.from(BUCKET).remove([logoAtual]);
+
+    logoAtual = null;
+    removerLogo.disabled = false;
+    previa.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
+    desenharLogo();
+    dizer(avisoLogo, 'Logo removida.', 'ok');
+  });
+
+  // ----------------------------------------------------------
+  // Fotos
+  // ----------------------------------------------------------
+  async function carregarFotos() {
+    const { data, error } = await sb.from('fotos')
+      .select('id, caminho, ordem')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('ordem').order('criado_em');
+
+    if (error) { galeria.innerHTML = '<p class="legenda">Erro ao carregar: ' + escapar(error.message) + '</p>'; return; }
+
+    if (!data.length) {
+      galeria.innerHTML = '<p class="legenda" style="grid-column:1/-1">Nenhuma foto ainda.</p>';
+      return;
+    }
+
+    galeria.innerHTML = data.map(f =>
+      '<figure class="foto"><img src="' + urlImagem(f.caminho) + '" alt="Foto da barbearia" loading="lazy" />' +
+      '<button data-apagar="' + f.id + '" data-caminho="' + escapar(f.caminho) + '">Excluir</button></figure>'
+    ).join('');
+  }
+
+  arqFotos.addEventListener('change', async () => {
+    const arquivos = Array.from(arqFotos.files);
+    if (!arquivos.length) return;
+
+    for (const a of arquivos) {
+      const problema = conferirImagem(a);
+      if (problema) return dizer(avisoFotos, a.name + ': ' + problema);
+    }
+
+    progFotos.classList.add('ativa');
+    avisoFotos.className = 'aviso';
+    let enviadas = 0;
+
+    for (const arquivo of arquivos) {
+      const caminho = barbearia.id + '/foto-' + Date.now() + '-' +
+                      Math.random().toString(36).slice(2, 6) + '.' + extensaoDe(arquivo);
+
+      const envio = await sb.storage.from(BUCKET).upload(caminho, arquivo);
+      if (envio.error) { dizer(avisoFotos, 'Falhou em ' + arquivo.name + ': ' + envio.error.message); continue; }
+
+      const { error } = await sb.from('fotos').insert({
+        estabelecimento_id: barbearia.id, caminho, ordem: enviadas
+      });
+      if (error) { dizer(avisoFotos, 'Enviou mas não registrou: ' + error.message); continue; }
+
+      enviadas++;
+    }
+
+    progFotos.classList.remove('ativa');
+    arqFotos.value = '';
+    if (enviadas) dizer(avisoFotos, enviadas + (enviadas === 1 ? ' foto enviada.' : ' fotos enviadas.'), 'ok');
+    carregarFotos();
+  });
+
+  galeria.addEventListener('click', async (e) => {
+    const botao = e.target.closest('[data-apagar]');
+    if (!botao) return;
+    if (!confirm('Excluir essa foto?')) return;
+
+    botao.disabled = true;
+    await sb.from('fotos').delete().eq('id', botao.dataset.apagar);
+    await sb.storage.from(BUCKET).remove([botao.dataset.caminho]);
+    carregarFotos();
+  });
+
+  desenharLogo();
+  carregarFotos();
+}
+</script>
+
+</body>
+</html>

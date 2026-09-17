@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Planos — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Planos e fidelidade</h1>
+    <p class="legenda">Assinaturas e cartão de pontos da sua barbearia.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <!-- PLANOS -->
+  <h2 class="secao-titulo" style="margin-top:0">Planos de assinatura</h2>
+  <div class="painel" style="max-width:860px">
+    <form id="form-plano">
+      <div class="form-grid">
+        <div class="campo" style="margin-top:0">
+          <label for="p-nome">Nome do plano</label>
+          <input id="p-nome" type="text" placeholder="Clube do Corte" required />
+        </div>
+        <div class="campo" style="margin-top:0">
+          <label for="p-preco">Preço (R$)</label>
+          <input id="p-preco" type="text" inputmode="decimal" placeholder="150,00" required />
+        </div>
+        <div class="campo">
+          <label for="p-periodicidade">Cobrança</label>
+          <select id="p-periodicidade">
+            <option value="mensal">Mensal</option>
+            <option value="trimestral">Trimestral</option>
+            <option value="semestral">Semestral</option>
+            <option value="anual">Anual</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="p-usos">Teto geral por período</label>
+          <input id="p-usos" type="number" min="1" max="99" placeholder="4" />
+          <p class="dica">Soma de todos os serviços cobertos. Vazio = sem teto.</p>
+        </div>
+        <div class="campo">
+          <label for="p-desc-servicos">Desconto nos demais serviços (%)</label>
+          <input id="p-desc-servicos" type="number" min="0" max="100" step="1" value="0" />
+          <p class="dica">Vale para o que não está na lista abaixo.</p>
+        </div>
+        <div class="campo">
+          <label for="p-desc-produtos">Desconto em produtos (%)</label>
+          <input id="p-desc-produtos" type="number" min="0" max="100" step="1" value="0" />
+          <p class="dica">Guardado para quando existir venda de produto.</p>
+        </div>
+        <div class="campo larga">
+          <label for="p-descricao">Descrição</label>
+          <textarea id="p-descricao" placeholder="O que está incluído, regras de uso, validade."></textarea>
+        </div>
+      </div>
+      <h3 class="secao-titulo" style="margin-top:28px">O que está incluído</h3>
+      <p class="legenda" style="margin-bottom:14px">
+        Marque os serviços cobertos. Para cada um: quantas vezes por período (vazio = ilimitado)
+        e quanto de desconto depois que a cota acabar.
+      </p>
+      <div id="itens-plano" class="itens-plano"></div>
+
+      <div class="aviso" id="p-aviso" role="status"></div>
+      <div class="acoes">
+        <button class="btn btn-solid" type="submit" id="p-salvar">Criar plano</button>
+        <button class="btn btn-outline" type="button" id="p-cancelar" style="display:none">Cancelar edição</button>
+      </div>
+    </form>
+  </div>
+  <div id="lista-planos" style="margin-top:20px"></div>
+
+  <!-- FIDELIDADE -->
+  <h2 class="secao-titulo" style="margin-top:48px">Cartão de fidelidade</h2>
+  <div class="painel" style="max-width:860px">
+    <form id="form-fidelidade">
+      <div class="form-grid">
+        <div class="campo" style="margin-top:0">
+          <label for="f-alvo">A cada quantos atendimentos</label>
+          <input id="f-alvo" type="number" min="2" max="100" value="10" />
+        </div>
+        <div class="campo" style="margin-top:0">
+          <label for="f-ativo">Situação</label>
+          <select id="f-ativo">
+            <option value="false">Desligado</option>
+            <option value="true">Ligado — aparece no perfil</option>
+          </select>
+        </div>
+        <div class="campo larga">
+          <label for="f-premio">Prêmio</label>
+          <input id="f-premio" type="text" placeholder="Um corte grátis" />
+        </div>
+      </div>
+      <div class="aviso" id="f-aviso" role="status"></div>
+      <div class="acoes"><button class="btn btn-solid" type="submit" id="f-salvar">Salvar regra</button></div>
+    </form>
+    <div id="previa-cartao"></div>
+  </div>
+
+  <!-- ASSINANTES -->
+  <h2 class="secao-titulo" style="margin-top:48px">Assinantes</h2>
+  <p class="legenda" style="margin-bottom:16px">
+    A cobrança ainda não é automática. Registre aqui quem já pagou, e a assinatura passa a aparecer para o cliente.
+  </p>
+  <div class="painel" style="max-width:860px">
+    <form id="form-assinatura">
+      <div class="form-grid">
+        <div class="campo" style="margin-top:0">
+          <label for="a-plano">Plano</label>
+          <select id="a-plano"></select>
+        </div>
+        <div class="campo" style="margin-top:0">
+          <label for="a-cliente">Cliente</label>
+          <select id="a-cliente"></select>
+        </div>
+        <div class="campo" id="campo-avulso" style="display:none">
+          <label for="a-nome">Nome</label>
+          <input id="a-nome" type="text" placeholder="Nome do cliente" />
+        </div>
+        <div class="campo" id="campo-fone" style="display:none">
+          <label for="a-telefone">Telefone</label>
+          <input id="a-telefone" type="tel" placeholder="(41) 90000-0000" />
+        </div>
+        <div class="campo">
+          <label for="a-inicio">Começa em</label>
+          <input id="a-inicio" type="date" />
+        </div>
+        <div class="campo">
+          <label for="a-fim">Vale até</label>
+          <input id="a-fim" type="date" />
+          <p class="dica">Preenchido sozinho pela periodicidade do plano.</p>
+        </div>
+      </div>
+      <div class="aviso" id="a-aviso" role="status"></div>
+      <div class="acoes"><button class="btn btn-solid" type="submit" id="a-salvar">Registrar assinatura</button></div>
+    </form>
+  </div>
+  <div id="lista-assinantes" style="margin-top:20px"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, moeda,
+         paraCentavos, deCentavos, escapar, PERIODOS } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('planos.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+function iniciar() {
+  const el = (id) => document.getElementById(id);
+  const dizer = (alvo, texto, tipo = 'erro') => {
+    const a = el(alvo); a.textContent = texto; a.className = 'aviso ' + tipo;
+  };
+  const hoje = new Date();
+  const iso = (d) => d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+  el('a-inicio').value = iso(hoje);
+
+  let planos = [];
+  let servicos = [];
+  let editandoPlano = null;
+
+  // ----------------------------------------------------------
+  // Serviços disponíveis para montar o plano
+  // ----------------------------------------------------------
+  async function carregarServicos() {
+    const { data } = await sb.from('servicos')
+      .select('id, nome, preco_centavos, duracao_min')
+      .eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome');
+
+    servicos = data || [];
+
+    if (!servicos.length) {
+      el('itens-plano').innerHTML =
+        '<p class="legenda">Cadastre serviços antes de montar um plano. ' +
+        '<a href="servicos.html" style="color:var(--orange)">Ir para Serviços</a></p>';
+      return;
+    }
+
+    el('itens-plano').innerHTML = servicos.map(sv =>
+      '<div class="item-plano" data-servico="' + sv.id + '">' +
+        '<label class="escolha" style="flex:1;min-width:200px">' +
+          '<input type="checkbox" data-marca />' +
+          '<span><b>' + escapar(sv.nome) + '</b>' +
+          '<small>' + moeda(sv.preco_centavos) + '</small></span>' +
+        '</label>' +
+        '<div class="campo" style="margin:0;width:120px">' +
+          '<label>Qtd / período</label>' +
+          '<input type="number" min="1" max="99" placeholder="∞" data-qtd disabled />' +
+        '</div>' +
+        '<div class="campo" style="margin:0;width:140px">' +
+          '<label>Desc. excedente</label>' +
+          '<input type="number" min="0" max="100" step="1" value="0" data-desc disabled />' +
+        '</div>' +
+      '</div>').join('');
+
+    el('itens-plano').addEventListener('change', (e) => {
+      const marca = e.target.closest('[data-marca]');
+      if (!marca) return;
+      const linha = marca.closest('.item-plano');
+      linha.querySelector('[data-qtd]').disabled = !marca.checked;
+      linha.querySelector('[data-desc]').disabled = !marca.checked;
+      linha.classList.toggle('ligado', marca.checked);
+    });
+  }
+
+  function lerItens() {
+    return [...el('itens-plano').querySelectorAll('.item-plano')]
+      .filter(l => l.querySelector('[data-marca]').checked)
+      .map(l => ({
+        servico_id: l.dataset.servico,
+        quantidade: l.querySelector('[data-qtd]').value
+          ? Number(l.querySelector('[data-qtd]').value) : null,
+        desconto_excedente_pct: Number(l.querySelector('[data-desc]').value) || 0
+      }));
+  }
+
+  function limparItens() {
+    el('itens-plano').querySelectorAll('.item-plano').forEach(l => {
+      l.querySelector('[data-marca]').checked = false;
+      l.querySelector('[data-qtd]').value = '';
+      l.querySelector('[data-qtd]').disabled = true;
+      l.querySelector('[data-desc]').value = 0;
+      l.querySelector('[data-desc]').disabled = true;
+      l.classList.remove('ligado');
+    });
+  }
+
+  // ----------------------------------------------------------
+  // Planos
+  // ----------------------------------------------------------
+  async function carregarPlanos() {
+    const { data, error } = await sb.from('planos')
+      .select('id, nome, descricao, preco_centavos, periodicidade, usos_por_periodo, ativo, desconto_servicos_pct, desconto_produtos_pct, plano_itens(servico_id, quantidade, desconto_excedente_pct)')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('preco_centavos');
+
+    if (error) { el('lista-planos').innerHTML = '<p class="legenda">Erro: ' + escapar(error.message) + '</p>'; return; }
+
+    planos = data;
+
+    el('a-plano').innerHTML = data.filter(p => p.ativo).map(p =>
+      '<option value="' + p.id + '" data-periodo="' + p.periodicidade + '">' +
+      escapar(p.nome) + ' — ' + moeda(p.preco_centavos) + '</option>').join('')
+      || '<option value="">Crie um plano primeiro</option>';
+
+    if (!data.length) {
+      el('lista-planos').innerHTML = '<div class="vazio"><b>Nenhum plano ainda</b>' +
+        '<p>Um plano é uma mensalidade que dá direito a atendimentos.</p></div>';
+      return;
+    }
+
+    el('lista-planos').innerHTML = '<div class="planos">' + data.map(p =>
+      '<div class="plano' + (p.ativo ? '' : ' inativo') + '">' +
+        '<h3>' + escapar(p.nome) + '</h3>' +
+        '<div class="preco">' + moeda(p.preco_centavos) +
+        '<small> / ' + PERIODOS[p.periodicidade].nome.toLowerCase() + '</small></div>' +
+        resumoItens(p) +
+        (p.descricao ? '<p>' + escapar(p.descricao) + '</p>' : '') +
+        '<div class="acoes">' +
+          '<button class="btn btn-outline" data-plano-editar="' + p.id + '">Editar</button>' +
+          '<button class="btn btn-outline" data-plano-alternar="' + p.id + '" data-ativo="' + p.ativo + '">' +
+            (p.ativo ? 'Desativar' : 'Ativar') + '</button>' +
+          '<button class="btn btn-perigo" data-plano-apagar="' + p.id + '">Excluir</button>' +
+        '</div>' +
+      '</div>').join('') + '</div>';
+  }
+
+  function resumoItens(p) {
+    const itens = p.plano_itens || [];
+    let linhas = itens.map(i => {
+      const sv = servicos.find(x => x.id === i.servico_id);
+      const nome = sv ? sv.nome : 'Serviço';
+      const qtd = i.quantidade == null ? 'ilimitado' : i.quantidade + 'x por período';
+      const exc = i.desconto_excedente_pct > 0
+        ? ' · depois ' + Number(i.desconto_excedente_pct) + '% off' : '';
+      return '<li>' + escapar(nome) + ' — ' + qtd + exc + '</li>';
+    });
+
+    if (p.usos_por_periodo) {
+      linhas.push('<li>Teto geral de ' + p.usos_por_periodo + ' atendimentos</li>');
+    }
+    if (Number(p.desconto_servicos_pct) > 0) {
+      linhas.push('<li>' + Number(p.desconto_servicos_pct) + '% nos demais serviços</li>');
+    }
+    if (Number(p.desconto_produtos_pct) > 0) {
+      linhas.push('<li>' + Number(p.desconto_produtos_pct) + '% em produtos</li>');
+    }
+
+    return linhas.length
+      ? '<ul class="inclui-lista">' + linhas.join('') + '</ul>'
+      : '<div class="inclui">Sem serviços incluídos</div>';
+  }
+
+  function editarPlano(p) {
+    editandoPlano = p.id;
+    el('p-nome').value = p.nome;
+    el('p-preco').value = deCentavos(p.preco_centavos);
+    el('p-periodicidade').value = p.periodicidade;
+    el('p-usos').value = p.usos_por_periodo || '';
+    el('p-desc-servicos').value = Number(p.desconto_servicos_pct) || 0;
+    el('p-desc-produtos').value = Number(p.desconto_produtos_pct) || 0;
+    el('p-descricao').value = p.descricao || '';
+
+    limparItens();
+    (p.plano_itens || []).forEach(i => {
+      const linha = el('itens-plano').querySelector('[data-servico="' + i.servico_id + '"]');
+      if (!linha) return;
+      linha.querySelector('[data-marca]').checked = true;
+      linha.querySelector('[data-qtd]').disabled = false;
+      linha.querySelector('[data-qtd]').value = i.quantidade ?? '';
+      linha.querySelector('[data-desc]').disabled = false;
+      linha.querySelector('[data-desc]').value = Number(i.desconto_excedente_pct) || 0;
+      linha.classList.add('ligado');
+    });
+
+    el('p-salvar').textContent = 'Salvar alterações';
+    el('p-cancelar').style.display = '';
+    el('form-plano').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function sairDaEdicao() {
+    editandoPlano = null;
+    el('form-plano').reset();
+    limparItens();
+    el('p-salvar').textContent = 'Criar plano';
+    el('p-cancelar').style.display = 'none';
+  }
+
+  el('p-cancelar').addEventListener('click', sairDaEdicao);
+
+  el('form-plano').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nome = el('p-nome').value.trim();
+    const centavos = paraCentavos(el('p-preco').value);
+    const usos = el('p-usos').value ? Number(el('p-usos').value) : null;
+
+    if (!nome) return dizer('p-aviso', 'Informe o nome do plano.');
+    if (centavos === null) return dizer('p-aviso', 'Preço inválido. Use algo como 150,00.');
+
+    const corpo = {
+      estabelecimento_id: barbearia.id,
+      nome,
+      descricao: el('p-descricao').value.trim() || null,
+      preco_centavos: centavos,
+      periodicidade: el('p-periodicidade').value,
+      usos_por_periodo: usos,
+      desconto_servicos_pct: Number(el('p-desc-servicos').value) || 0,
+      desconto_produtos_pct: Number(el('p-desc-produtos').value) || 0
+    };
+
+    el('p-salvar').disabled = true;
+
+    let planoId = editandoPlano;
+    let error;
+
+    if (editandoPlano) {
+      ({ error } = await sb.from('planos').update(corpo).eq('id', editandoPlano));
+    } else {
+      const criado = await sb.from('planos').insert(corpo).select('id').single();
+      error = criado.error;
+      planoId = criado.data?.id;
+    }
+
+    if (!error && planoId) {
+      // regrava a lista de incluídos por inteiro
+      await sb.from('plano_itens').delete().eq('plano_id', planoId);
+      const itens = lerItens();
+      if (itens.length) {
+        const r = await sb.from('plano_itens')
+          .insert(itens.map(i => ({ ...i, plano_id: planoId })));
+        error = r.error || error;
+      }
+    }
+
+    el('p-salvar').disabled = false;
+
+    if (error) return dizer('p-aviso', 'Não foi possível salvar: ' + error.message);
+    const novo = !editandoPlano;
+    sairDaEdicao();
+    dizer('p-aviso', novo ? 'Plano criado.' : 'Plano atualizado.', 'ok');
+    carregarPlanos();
+  });
+
+  el('lista-planos').addEventListener('click', async (e) => {
+    const editar = e.target.closest('[data-plano-editar]');
+    if (editar) {
+      const p = planos.find(x => x.id === editar.dataset.planoEditar);
+      if (p) editarPlano(p);
+      return;
+    }
+
+    const alternar = e.target.closest('[data-plano-alternar]');
+    const apagar = e.target.closest('[data-plano-apagar]');
+
+    if (alternar) {
+      alternar.disabled = true;
+      await sb.from('planos').update({ ativo: alternar.dataset.ativo !== 'true' })
+        .eq('id', alternar.dataset.planoAlternar);
+      carregarPlanos();
+      return;
+    }
+
+    if (apagar) {
+      if (!confirm('Excluir esse plano? Se já houver assinante, o banco não vai permitir — nesse caso use Desativar.')) return;
+      apagar.disabled = true;
+      const { error } = await sb.from('planos').delete().eq('id', apagar.dataset.planoApagar);
+      if (error) {
+        alert('Não foi possível excluir. Provavelmente já existe assinatura nesse plano. Use Desativar.');
+        apagar.disabled = false;
+        return;
+      }
+      carregarPlanos();
+    }
+  });
+
+  // ----------------------------------------------------------
+  // Fidelidade
+  // ----------------------------------------------------------
+  function previaCartao(alvo, premio) {
+    let selos = '';
+    for (let i = 1; i <= alvo; i++) {
+      selos += '<span class="selo-ponto' + (i === alvo ? ' premio' : '') + '">' +
+        (i === alvo ? '★' : i) + '</span>';
+    }
+    el('previa-cartao').innerHTML = '<div class="cartao-pontos" style="margin-top:22px">' +
+      '<b>Assim o cliente vê</b><div class="selos">' + selos + '</div>' +
+      '<p class="legenda" style="margin-top:14px">Na ' + alvo + 'ª visita: ' +
+      escapar(premio || 'prêmio não definido') + '</p></div>';
+  }
+
+  async function carregarFidelidade() {
+    const { data } = await sb.from('fidelidade')
+      .select('atendimentos_alvo, premio, ativo')
+      .eq('estabelecimento_id', barbearia.id).maybeSingle();
+
+    if (data) {
+      el('f-alvo').value = data.atendimentos_alvo;
+      el('f-premio').value = data.premio;
+      el('f-ativo').value = String(data.ativo);
+    }
+    previaCartao(Number(el('f-alvo').value) || 10, el('f-premio').value || 'Um corte grátis');
+  }
+
+  el('form-fidelidade').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const alvo = Number(el('f-alvo').value);
+    const premio = el('f-premio').value.trim() || 'Um corte grátis';
+
+    if (!alvo || alvo < 2) return dizer('f-aviso', 'O alvo precisa ser de pelo menos 2 atendimentos.');
+
+    el('f-salvar').disabled = true;
+    const { error } = await sb.from('fidelidade').upsert({
+      estabelecimento_id: barbearia.id,
+      atendimentos_alvo: alvo,
+      premio,
+      ativo: el('f-ativo').value === 'true',
+      atualizado_em: new Date().toISOString()
+    });
+    el('f-salvar').disabled = false;
+
+    if (error) return dizer('f-aviso', 'Não foi possível salvar: ' + error.message);
+    dizer('f-aviso', 'Regra salva.', 'ok');
+    previaCartao(alvo, premio);
+  });
+
+  el('f-alvo').addEventListener('input', () =>
+    previaCartao(Number(el('f-alvo').value) || 10, el('f-premio').value));
+  el('f-premio').addEventListener('input', () =>
+    previaCartao(Number(el('f-alvo').value) || 10, el('f-premio').value));
+
+  // ----------------------------------------------------------
+  // Assinantes
+  // ----------------------------------------------------------
+  async function carregarClientes() {
+    // quem já marcou com você e tem conta na plataforma
+    const { data } = await sb.from('agendamentos')
+      .select('cliente_id, perfis(nome)')
+      .eq('estabelecimento_id', barbearia.id)
+      .not('cliente_id', 'is', null);
+
+    const vistos = new Map();
+    (data || []).forEach(a => {
+      if (a.cliente_id && !vistos.has(a.cliente_id)) {
+        vistos.set(a.cliente_id, a.perfis?.nome || 'Cliente');
+      }
+    });
+
+    el('a-cliente').innerHTML =
+      [...vistos.entries()].map(([id, nome]) =>
+        '<option value="' + id + '">' + escapar(nome) + '</option>').join('') +
+      '<option value="avulso">Outro — digitar nome</option>';
+  }
+
+  el('a-cliente').addEventListener('change', () => {
+    const avulso = el('a-cliente').value === 'avulso';
+    el('campo-avulso').style.display = avulso ? '' : 'none';
+    el('campo-fone').style.display = avulso ? '' : 'none';
+  });
+
+  function calcularFim() {
+    const opcao = el('a-plano').selectedOptions[0];
+    if (!opcao || !el('a-inicio').value) return;
+    const dias = PERIODOS[opcao.dataset.periodo]?.dias || 30;
+    const fim = new Date(el('a-inicio').value + 'T12:00:00');
+    fim.setDate(fim.getDate() + dias);
+    el('a-fim').value = iso(fim);
+  }
+
+  el('a-plano').addEventListener('change', calcularFim);
+  el('a-inicio').addEventListener('change', calcularFim);
+
+  async function carregarAssinantes() {
+    const { data, error } = await sb.from('assinaturas')
+      .select('id, inicio, fim, status, cliente_nome, cliente_telefone, planos(nome, preco_centavos), perfis(nome, telefone)')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('inicio', { ascending: false });
+
+    if (error) { el('lista-assinantes').innerHTML = '<p class="legenda">Erro: ' + escapar(error.message) + '</p>'; return; }
+
+    if (!data.length) {
+      el('lista-assinantes').innerHTML = '<div class="vazio"><b>Nenhum assinante ainda</b>' +
+        '<p>Registre acima quem já pagou o plano.</p></div>';
+      return;
+    }
+
+    const hojeIso = iso(new Date());
+
+    el('lista-assinantes').innerHTML = data.map(a => {
+      const nome = a.perfis?.nome || a.cliente_nome || 'Cliente';
+      const fone = a.perfis?.telefone || a.cliente_telefone || '';
+      const vencida = a.fim && a.fim < hojeIso && a.status === 'ativa';
+      const situacao = vencida ? 'expirada' : a.status;
+
+      return '<div class="item">' +
+        '<div class="principal"><b>' + escapar(nome) + '</b>' +
+        '<span>' + escapar(a.planos?.nome || 'Plano') +
+        (fone ? ' · ' + escapar(fone) : '') +
+        ' · de ' + new Date(a.inicio + 'T12:00:00').toLocaleDateString('pt-BR') +
+        (a.fim ? ' até ' + new Date(a.fim + 'T12:00:00').toLocaleDateString('pt-BR') : '') +
+        '</span></div>' +
+        '<span class="selo ' + (situacao === 'ativa' ? 'confirmado' : 'cancelado') + '">' + situacao + '</span>' +
+        (a.status === 'ativa'
+          ? '<button class="btn btn-outline" data-assinatura="' + a.id + '" data-status="pausada">Pausar</button>' +
+            '<button class="btn btn-perigo" data-assinatura="' + a.id + '" data-status="cancelada">Cancelar</button>'
+          : '<button class="btn btn-outline" data-assinatura="' + a.id + '" data-status="ativa">Reativar</button>') +
+      '</div>';
+    }).join('');
+  }
+
+  el('form-assinatura').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const plano = el('a-plano').value;
+    if (!plano) return dizer('a-aviso', 'Crie um plano antes.');
+
+    const avulso = el('a-cliente').value === 'avulso';
+    const registro = {
+      estabelecimento_id: barbearia.id,
+      plano_id: plano,
+      inicio: el('a-inicio').value || iso(new Date()),
+      fim: el('a-fim').value || null
+    };
+
+    if (avulso) {
+      const nome = el('a-nome').value.trim();
+      if (!nome) return dizer('a-aviso', 'Informe o nome do cliente.');
+      registro.cliente_nome = nome;
+      registro.cliente_telefone = el('a-telefone').value.trim() || null;
+    } else {
+      if (!el('a-cliente').value) return dizer('a-aviso', 'Escolha o cliente.');
+      registro.cliente_id = el('a-cliente').value;
+    }
+
+    el('a-salvar').disabled = true;
+    const { error } = await sb.from('assinaturas').insert(registro);
+    el('a-salvar').disabled = false;
+
+    if (error) return dizer('a-aviso', 'Não foi possível salvar: ' + error.message);
+    el('a-nome').value = '';
+    el('a-telefone').value = '';
+    dizer('a-aviso', 'Assinatura registrada.', 'ok');
+    carregarAssinantes();
+  });
+
+  el('lista-assinantes').addEventListener('click', async (e) => {
+    const botao = e.target.closest('[data-assinatura]');
+    if (!botao) return;
+    if (botao.dataset.status === 'cancelada' && !confirm('Cancelar essa assinatura?')) return;
+    botao.disabled = true;
+    await sb.from('assinaturas').update({ status: botao.dataset.status })
+      .eq('id', botao.dataset.assinatura);
+    carregarAssinantes();
+  });
+
+  carregarServicos().then(carregarPlanos);
+  carregarFidelidade();
+  carregarClientes();
+  carregarAssinantes();
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Clientes — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Clientes</h1>
+    <p class="legenda">Quem já marcou com você, e o que cada um costuma fazer.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="barra">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+      <input id="termo" type="search" placeholder="Nome ou telefone" aria-label="Buscar cliente" />
+    </div>
+    <select id="ordem" class="entrada-data">
+      <option value="recente">Atendidos recentemente</option>
+      <option value="frequencia">Quem mais volta</option>
+      <option value="valor">Quem mais gastou</option>
+      <option value="sumidos">Sumidos há mais tempo</option>
+      <option value="nome">Nome</option>
+    </select>
+    <span id="resumo" style="color:var(--muted);font-size:14px"></span>
+  </div>
+  <div id="lista"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, moeda, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('clientes.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+async function iniciar() {
+  const termo   = document.getElementById('termo');
+  const ordem   = document.getElementById('ordem');
+  const lista   = document.getElementById('lista');
+  const resumo  = document.getElementById('resumo');
+
+  const { data, error } = await sb.from('agendamentos')
+    .select('id, inicio, status, valor_centavos, cliente_id, cliente_nome, cliente_telefone, agendamento_servicos(nome, ordem), perfis(nome, telefone)')
+    .eq('estabelecimento_id', barbearia.id)
+    .order('inicio', { ascending: false });
+
+  if (error) {
+    lista.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>';
+    return;
+  }
+
+  if (!data.length) {
+    lista.innerHTML = '<div class="vazio"><b>Nenhum cliente ainda</b>' +
+      '<p>A lista se monta sozinha conforme as pessoas marcam horário.</p></div>';
+    return;
+  }
+
+  // ------------------------------------------------------------
+  // Junta os agendamentos por pessoa.
+  // Quem tem conta é agrupado pelo id; o encaixe, pelo telefone
+  // ou, na falta dele, pelo nome digitado.
+  // ------------------------------------------------------------
+  const mapa = new Map();
+
+  for (const a of data) {
+    const chave = a.cliente_id
+      || ('avulso:' + (a.cliente_telefone || a.cliente_nome || '').toLowerCase().replace(/\D/g, ''));
+
+    if (!mapa.has(chave)) {
+      mapa.set(chave, {
+        nome: a.perfis?.nome || a.cliente_nome || 'Cliente',
+        telefone: a.perfis?.telefone || a.cliente_telefone || '',
+        temConta: !!a.cliente_id,
+        total: 0, concluidos: 0, faltas: 0, cancelados: 0,
+        gasto: 0, ultimo: null, primeiro: null,
+        servicos: new Map()
+      });
+    }
+
+    const c = mapa.get(chave);
+    const quando = new Date(a.inicio);
+
+    c.total++;
+    if (a.status === 'concluido') { c.concluidos++; c.gasto += a.valor_centavos || 0; }
+    if (a.status === 'faltou') c.faltas++;
+    if (a.status === 'cancelado') c.cancelados++;
+
+    if (!c.ultimo || quando > c.ultimo) c.ultimo = quando;
+    if (!c.primeiro || quando < c.primeiro) c.primeiro = quando;
+
+    (a.agendamento_servicos || []).forEach(i => {
+      c.servicos.set(i.nome, (c.servicos.get(i.nome) || 0) + 1);
+    });
+  }
+
+  const clientes = [...mapa.values()];
+
+  function desenhar() {
+    const busca = termo.value.trim().toLowerCase();
+    let visiveis = clientes.filter(c =>
+      !busca || c.nome.toLowerCase().includes(busca) || (c.telefone || '').includes(busca));
+
+    const criterio = {
+      recente:    (a, b) => b.ultimo - a.ultimo,
+      sumidos:    (a, b) => a.ultimo - b.ultimo,
+      frequencia: (a, b) => b.concluidos - a.concluidos || b.total - a.total,
+      valor:      (a, b) => b.gasto - a.gasto,
+      nome:       (a, b) => a.nome.localeCompare(b.nome, 'pt-BR')
+    }[ordem.value];
+
+    visiveis = visiveis.sort(criterio);
+
+    resumo.textContent = visiveis.length + (visiveis.length === 1 ? ' cliente' : ' clientes');
+
+    if (!visiveis.length) {
+      lista.innerHTML = '<div class="vazio"><b>Nada encontrado</b><p>Tente outro nome ou telefone.</p></div>';
+      return;
+    }
+
+    const hoje = new Date();
+
+    lista.innerHTML = '<div class="rolagem"><table class="tabela">' +
+      '<thead><tr><th>Cliente</th><th>Preferido</th>' +
+      '<th class="num">Atendimentos</th><th class="num">Gasto</th><th class="num">Última vez</th></tr></thead><tbody>' +
+      visiveis.map(c => {
+        const favorito = [...c.servicos.entries()].sort((a, b) => b[1] - a[1])[0];
+        const dias = Math.floor((hoje - c.ultimo) / 86400000);
+        const desde = dias === 0 ? 'hoje' : dias === 1 ? 'ontem' : 'há ' + dias + ' dias';
+        const alerta = (c.faltas ? c.faltas + (c.faltas === 1 ? ' falta' : ' faltas') : '');
+
+        return '<tr>' +
+          '<td><b>' + escapar(c.nome) + '</b>' +
+            '<span>' + (c.telefone ? escapar(c.telefone) + ' · ' : '') +
+            (c.temConta ? 'tem conta' : 'encaixe') +
+            (alerta ? ' · ' + alerta : '') + '</span></td>' +
+          '<td>' + (favorito ? escapar(favorito[0]) + '<span>' + favorito[1] + 'x</span>' : '—') + '</td>' +
+          '<td class="num">' + c.concluidos + '<span>de ' + c.total + ' marcados</span></td>' +
+          '<td class="num">' + moeda(c.gasto) + '</td>' +
+          '<td class="num">' + c.ultimo.toLocaleDateString('pt-BR') + '<span>' + desde + '</span></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  termo.addEventListener('input', desenhar);
+  ordem.addEventListener('change', desenhar);
+  desenhar();
+}
+</script>
+
+</body>
+</html>

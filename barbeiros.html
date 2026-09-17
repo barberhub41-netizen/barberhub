@@ -39,14 +39,13 @@
 </template>
 
 <script type="module">
-import { sb, montarTopo, exigirLogin, subnav, minhaBarbearia, escapar } from './app.js';
+import { sb, montarTopo, exigirLogin, montarPainel, escapar } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
-document.getElementById('menu').innerHTML = subnav('barbeiros.html');
+const barbearia = await montarPainel('barbeiros.html');
 
 const conteudo = document.getElementById('conteudo');
-const barbearia = await minhaBarbearia(sessao);
 
 if (!barbearia) {
   conteudo.innerHTML = '<div class="vazio">' +

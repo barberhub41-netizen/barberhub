@@ -20,7 +20,7 @@
 </main>
 
 <script type="module">
-import { sb, montarTopo, moeda, duracao, escapar } from './app.js';
+import { sb, montarTopo, moeda, duracao, escapar, urlImagem, estrelas, sessaoAtual, PERIODOS } from './app.js';
 
 montarTopo('buscar');
 
@@ -28,6 +28,50 @@ const conteudo = document.getElementById('conteudo');
 const slug = new URLSearchParams(location.search).get('slug');
 
 const TESOURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
+
+function detalhePlano(p, servicos) {
+  const linhas = (p.plano_itens || []).map(i => {
+    const sv = servicos.find(x => x.id === i.servico_id);
+    const nome = sv ? sv.nome : 'Serviço';
+    const qtd = i.quantidade == null ? 'à vontade' : i.quantidade + 'x por período';
+    const exc = i.desconto_excedente_pct > 0
+      ? ', depois ' + Number(i.desconto_excedente_pct) + '% de desconto' : '';
+    return '<li>' + escapar(nome) + ': ' + qtd + exc + '</li>';
+  });
+
+  if (p.usos_por_periodo) linhas.push('<li>Até ' + p.usos_por_periodo + ' atendimentos no período</li>');
+  if (Number(p.desconto_servicos_pct) > 0) {
+    linhas.push('<li>' + Number(p.desconto_servicos_pct) + '% de desconto nos demais serviços</li>');
+  }
+  if (Number(p.desconto_produtos_pct) > 0) {
+    linhas.push('<li>' + Number(p.desconto_produtos_pct) + '% de desconto em produtos</li>');
+  }
+
+  return linhas.length
+    ? '<ul class="inclui-lista">' + linhas.join('') + '</ul>'
+    : '<div class="inclui">Consulte as condições</div>';
+}
+
+function cartaoFidelidade(regra, feitos) {
+  const alvo = regra.atendimentos_alvo;
+  const noCiclo = feitos === null ? 0 : feitos % alvo;
+  let selos = '';
+  for (let i = 1; i <= alvo; i++) {
+    const cheio = feitos !== null && i <= noCiclo;
+    selos += '<span class="selo-ponto' + (cheio ? ' feito' : '') +
+      (i === alvo ? ' premio' : '') + '">' + (i === alvo ? '★' : i) + '</span>';
+  }
+  const faltam = alvo - noCiclo;
+  return '<h2 class="secao-titulo" style="margin-top:44px">Cartão de fidelidade</h2>' +
+    '<div class="cartao-pontos"><b>' + escapar(regra.premio) + '</b>' +
+    '<div class="selos">' + selos + '</div>' +
+    '<p class="legenda" style="margin-top:14px">' +
+    (feitos === null
+      ? 'A cada ' + alvo + ' atendimentos concluídos aqui, você ganha: ' + escapar(regra.premio) + '. Entre na sua conta para acompanhar.'
+      : 'Você tem ' + noCiclo + ' de ' + alvo + '. ' +
+        (faltam === alvo ? 'Comece agora.' : 'Faltam ' + faltam + '.')) +
+    '</p></div>';
+}
 
 function naoEncontrada(motivo) {
   conteudo.innerHTML = '<div class="vazio" style="margin-top:60px">' +
@@ -40,7 +84,7 @@ if (!slug) {
 } else {
   const { data: b, error } = await sb
     .from('estabelecimentos')
-    .select('id, nome, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf')
+    .select('id, nome, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf, logo_caminho, matriz_id, nota_media, nota_qtd')
     .eq('slug', slug)
     .maybeSingle();
 
@@ -56,14 +100,39 @@ if (!slug) {
 async function montarPerfil(b) {
   document.title = b.nome + ' — BarberHub';
 
-  const [servicos, equipe] = await Promise.all([
+  const raiz = b.matriz_id || b.id;
+  const [servicos, equipe, fotos, unidades, avaliacoes, planos, fidelidade] = await Promise.all([
     sb.from('servicos')
       .select('id, nome, descricao, preco_centavos, duracao_min')
       .eq('estabelecimento_id', b.id).eq('ativo', true).order('preco_centavos'),
     sb.from('barbeiros')
       .select('id, nome')
-      .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome')
+      .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome'),
+    sb.from('fotos').select('caminho')
+      .eq('estabelecimento_id', b.id).order('ordem').order('criado_em'),
+    sb.from('estabelecimentos').select('nome, slug, bairro, cidade')
+      .eq('status', 'disponivel').or('id.eq.' + raiz + ',matriz_id.eq.' + raiz)
+      .neq('id', b.id).order('cidade'),
+    sb.from('avaliacoes')
+      .select('id, nota, comentario, resposta, criado_em, barbeiros(nome), perfis(nome)')
+      .eq('estabelecimento_id', b.id).order('criado_em', { ascending: false }).limit(20),
+    sb.from('planos').select('id, nome, descricao, preco_centavos, periodicidade, usos_por_periodo, desconto_servicos_pct, desconto_produtos_pct, plano_itens(servico_id, quantidade, desconto_excedente_pct)')
+      .eq('estabelecimento_id', b.id).eq('ativo', true).order('preco_centavos'),
+    sb.from('fidelidade').select('atendimentos_alvo, premio, ativo')
+      .eq('estabelecimento_id', b.id).maybeSingle()
   ]);
+
+  // se o cliente estiver logado, mostra o andamento do cartão dele
+  let progresso = null;
+  const sessao = await sessaoAtual();
+  if (sessao && fidelidade.data?.ativo) {
+    const { count } = await sb.from('agendamentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('estabelecimento_id', b.id)
+      .eq('cliente_id', sessao.user.id)
+      .eq('status', 'concluido');
+    progresso = count || 0;
+  }
 
   const endereco = [
     [b.logradouro, b.numero].filter(Boolean).join(', '),
@@ -90,9 +159,13 @@ async function montarPerfil(b) {
 
   conteudo.innerHTML =
     '<a class="voltar" href="buscar.html" style="text-align:left;margin:0 0 20px">← Voltar para a busca</a>' +
-    '<div class="perfil-capa"><span class="perfil-logo">' + TESOURA + '</span></div>' +
+    '<div class="perfil-capa"><span class="perfil-logo">' + (b.logo_caminho
+      ? '<img src="' + urlImagem(b.logo_caminho) + '" alt="Logo" />'
+      : TESOURA) + '</span></div>' +
     '<div class="perfil-topo">' +
-      '<div><h1>' + escapar(b.nome) + '</h1>' +
+      '<div><h1>' + escapar(b.nome) +
+      (b.nota_qtd ? ' <span class="nota">★ ' + Number(b.nota_media).toFixed(1).replace('.', ',') +
+        ' <small>(' + b.nota_qtd + ')</small></span>' : '') + '</h1>' +
       '<p class="perfil-endereco">' + escapar(endereco) + '</p>' +
       (b.telefone ? '<p class="perfil-endereco">' + escapar(b.telefone) + '</p>' : '') + '</div>' +
       (podeAgendar
@@ -100,10 +173,49 @@ async function montarPerfil(b) {
         : '') +
     '</div>' +
     (b.descricao ? '<p class="perfil-descricao">' + escapar(b.descricao) + '</p>' : '') +
+    ((fotos.data || []).length
+      ? '<div class="perfil-galeria">' + fotos.data.map(f =>
+          '<img src="' + urlImagem(f.caminho) + '" alt="Foto da barbearia" loading="lazy" />').join('') + '</div>'
+      : '') +
     '<div class="perfil-grid">' +
       '<section><h2 class="secao-titulo">Serviços</h2>' + listaServicos + '</section>' +
       '<section><h2 class="secao-titulo">Equipe</h2>' + listaEquipe + '</section>' +
-    '</div>';
+    '</div>' +
+    ((planos.data || []).length
+      ? '<h2 class="secao-titulo" style="margin-top:44px">Planos</h2><div class="planos">' +
+        planos.data.map(p =>
+          '<div class="plano"><h3>' + escapar(p.nome) + '</h3>' +
+          '<div class="preco">' + moeda(p.preco_centavos) +
+          '<small> / ' + PERIODOS[p.periodicidade].nome.toLowerCase() + '</small></div>' +
+          detalhePlano(p, servicos.data || []) +
+          (p.descricao ? '<p>' + escapar(p.descricao) + '</p>' : '') +
+          '<p class="legenda" style="margin-top:14px;font-size:13px">Fale com a barbearia para assinar.</p>' +
+          '</div>').join('') + '</div>'
+      : '') +
+    (fidelidade.data?.ativo ? cartaoFidelidade(fidelidade.data, progresso) : '') +
+    ((avaliacoes.data || []).length
+      ? '<h2 class="secao-titulo" style="margin-top:44px">Avaliações</h2>' +
+        avaliacoes.data.map(a =>
+          '<article class="avaliacao"><div class="avaliacao-topo">' +
+          '<div><b>' + escapar(a.perfis?.nome || 'Cliente') + '</b> ' + estrelas(a.nota) +
+          (a.barbeiros?.nome ? '<div class="servico">com ' + escapar(a.barbeiros.nome) + '</div>' : '') +
+          '</div><time>' + new Date(a.criado_em).toLocaleDateString('pt-BR') + '</time></div>' +
+          (a.comentario ? '<p>' + escapar(a.comentario) + '</p>' : '') +
+          (a.resposta ? '<div class="resposta"><b>Resposta da barbearia</b><p>' +
+            escapar(a.resposta) + '</p></div>' : '') +
+          '</article>'
+        ).join('')
+      : '') +
+    ((unidades.data || []).length
+      ? '<h2 class="secao-titulo" style="margin-top:44px">Outras unidades</h2><div class="cards">' +
+        unidades.data.map(u =>
+          '<a class="card" href="barbearia.html?slug=' + encodeURIComponent(u.slug) + '">' +
+          '<span class="avatar">' + TESOURA + '</span>' +
+          '<span class="card-txt"><b>' + escapar(u.nome) + '</b>' +
+          '<span>' + escapar([u.bairro, u.cidade].filter(Boolean).join(' — ')) + '</span></span>' +
+          '<span class="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></a>'
+        ).join('') + '</div>'
+      : '');
 }
 </script>
 

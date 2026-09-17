@@ -32,7 +32,7 @@
 </main>
 
 <script type="module">
-import { sb, montarTopo, escapar } from './app.js';
+import { sb, montarTopo, escapar, urlImagem } from './app.js';
 
 montarTopo('buscar');
 
@@ -55,7 +55,11 @@ function cartao(e) {
   const endereco = [e.logradouro, e.numero].filter(Boolean).join(', ');
   const local    = [e.bairro, e.cidade].filter(Boolean).join(' — ');
   return '<a class="card" href="barbearia.html?slug=' + encodeURIComponent(e.slug) + '">' +
-    '<span class="avatar">' + TESOURA + '</span>' +
+    '<span class="avatar">' + (e.logo_caminho
+      ? '<img src="' + urlImagem(e.logo_caminho) + '" alt="" loading="lazy" />'
+      : TESOURA) +
+      (e.nota_qtd ? '<span class="badge">★ ' + Number(e.nota_media).toFixed(1).replace('.', ',') + '</span>' : '') +
+    '</span>' +
     '<span class="card-txt">' +
       '<b>' + escapar(e.nome) + '</b>' +
       '<span>' + escapar(endereco || local) + '</span>' +
@@ -70,7 +74,7 @@ async function buscar() {
 
   let consulta = sb
     .from('estabelecimentos')
-    .select('id, nome, slug, bairro, cidade, uf, logradouro, numero')
+    .select('id, nome, slug, bairro, cidade, uf, logradouro, numero, logo_caminho, nota_media, nota_qtd')
     .eq('status', 'disponivel')
     .order('nome');
 
