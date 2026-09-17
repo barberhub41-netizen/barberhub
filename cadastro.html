@@ -67,6 +67,7 @@
 <script type="module">
 import { sb, traduzErro } from './config.js';
 
+const destino = new URLSearchParams(location.search).get('voltar') || 'meus-agendamentos.html';
 const form   = document.getElementById('form-cadastro');
 const aviso  = document.getElementById('aviso');
 const botao  = document.getElementById('botao');
@@ -78,7 +79,7 @@ function mostrar(texto, tipo = 'erro') {
 }
 
 const { data: { session } } = await sb.auth.getSession();
-if (session) location.replace('meus-agendamentos.html');
+if (session) location.replace(destino);
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -110,7 +111,7 @@ form.addEventListener('submit', async (e) => {
 
   // Com a confirmação de e-mail desligada, a sessão já vem pronta.
   if (data.session) {
-    location.href = 'meus-agendamentos.html';
+    location.href = destino;
   } else {
     mostrar('Conta criada. Confirme o e-mail que enviamos para entrar.', 'ok');
     botao.textContent = 'Conta criada';
@@ -121,7 +122,7 @@ google.addEventListener('click', async () => {
   google.disabled = true;
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: new URL('meus-agendamentos.html', location.href).href }
+    options: { redirectTo: new URL(destino, location.href).href }
   });
   if (error) {
     mostrar(traduzErro(error.message));

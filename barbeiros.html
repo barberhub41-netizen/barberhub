@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Equipe — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Equipe</h1>
+    <p class="legenda">Quem atende na sua barbearia. Cada profissional terá a própria agenda.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="painel" style="max-width:860px">
+    <form id="novo">
+      <div class="linha-form" style="grid-template-columns:1fr auto">
+        <div class="campo">
+          <label for="nome">Nome do profissional</label>
+          <input id="nome" type="text" placeholder="José da Silva" required />
+        </div>
+        <button class="btn btn-solid" type="submit" id="adicionar">Adicionar</button>
+      </div>
+      <div class="aviso" id="aviso" role="status"></div>
+    </form>
+  </div>
+  <div id="lista" style="margin-top:28px"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, subnav, minhaBarbearia, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+document.getElementById('menu').innerHTML = subnav('barbeiros.html');
+
+const conteudo = document.getElementById('conteudo');
+const barbearia = await minhaBarbearia(sessao);
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio">' +
+    '<b>Cadastre a barbearia primeiro</b>' +
+    '<p>A equipe pertence a um estabelecimento. Preencha os dados antes.</p>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+function iniciar() {
+  const lista = document.getElementById('lista');
+  const aviso = document.getElementById('aviso');
+  const botao = document.getElementById('adicionar');
+
+  const mostrar = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
+
+  async function carregar() {
+    const { data, error } = await sb
+      .from('barbeiros')
+      .select('id, nome, ativo, perfil_id')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('nome');
+
+    if (error) { lista.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>'; return; }
+
+    if (!data.length) {
+      lista.innerHTML = '<div class="vazio"><b>Nenhum profissional ainda</b>' +
+        '<p>Cadastre pelo menos um. Se você atende sozinho, coloque o seu próprio nome.</p></div>';
+      return;
+    }
+
+    lista.innerHTML = data.map(b =>
+      '<div class="item' + (b.ativo ? '' : ' inativo') + '">' +
+        '<div class="principal"><b>' + escapar(b.nome) + '</b>' +
+        '<span>' + (b.ativo ? 'Recebendo agendamentos' : 'Fora da agenda') +
+        (b.perfil_id ? ' · tem login próprio' : '') + '</span></div>' +
+        '<button class="btn btn-outline" data-alternar="' + b.id + '" data-ativo="' + b.ativo + '">' +
+          (b.ativo ? 'Afastar' : 'Reativar') + '</button>' +
+        '<button class="btn btn-perigo" data-apagar="' + b.id + '">Excluir</button>' +
+      '</div>'
+    ).join('');
+  }
+
+  document.getElementById('novo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nome = document.getElementById('nome').value.trim();
+    if (!nome) return mostrar('Informe o nome do profissional.');
+
+    botao.disabled = true;
+    const { error } = await sb.from('barbeiros').insert({
+      estabelecimento_id: barbearia.id, nome
+    });
+    botao.disabled = false;
+
+    if (error) return mostrar('Não foi possível salvar: ' + error.message);
+
+    document.getElementById('novo').reset();
+    mostrar('Profissional adicionado.', 'ok');
+    carregar();
+  });
+
+  lista.addEventListener('click', async (e) => {
+    const alternar = e.target.closest('[data-alternar]');
+    const apagar   = e.target.closest('[data-apagar]');
+
+    if (alternar) {
+      const ativo = alternar.dataset.ativo === 'true';
+      alternar.disabled = true;
+      await sb.from('barbeiros').update({ ativo: !ativo }).eq('id', alternar.dataset.alternar);
+      carregar();
+      return;
+    }
+
+    if (apagar) {
+      if (!confirm('Excluir esse profissional? Se ele já tiver agendamentos, o banco não vai permitir — nesse caso use Afastar.')) return;
+      apagar.disabled = true;
+      const { error } = await sb.from('barbeiros').delete().eq('id', apagar.dataset.apagar);
+      if (error) {
+        alert('Não foi possível excluir. Provavelmente já existe agendamento com esse profissional. Use Afastar.');
+        apagar.disabled = false;
+        return;
+      }
+      carregar();
+    }
+  });
+
+  carregar();
+}
+</script>
+
+</body>
+</html>

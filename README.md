@@ -12,7 +12,12 @@ Site estático (HTML, CSS e JavaScript) com banco de dados e autenticação no S
 index.html                 início — página do cliente
 buscar.html                lista as barbearias disponíveis no catálogo
 para-estabelecimentos.html apresentação da plataforma para donos de barbearia
-barbearia.html             perfil de uma barbearia  (ainda não existe)
+barbearia.html             perfil público de uma barbearia
+agendar.html               marcação de horário pelo cliente
+jornadas.html              jornada, pausas e bloqueios de cada barbeiro
+agenda.html                agenda do dia em calendário, com encaixe
+servicos.html              cadastro de serviços do estabelecimento
+barbeiros.html             cadastro da equipe
 entrar.html                login por e-mail/senha e Google
 cadastro.html              criação de conta de cliente
 meus-agendamentos.html     agendamentos do cliente, com cancelamento
@@ -23,6 +28,9 @@ estilo.css                 estilo compartilhado por todas as páginas
 sql/schema.sql             tabelas, índices e gatilhos
 sql/permissoes.sql         políticas de RLS (quem vê e edita o quê)
 sql/conferencia.sql        consulta que confere se o banco está completo
+sql/migracao-01-intervalo.sql  intervalo entre horários (rodar uma vez)
+sql/migracao-02-encaixe.sql    cliente sem conta, para encaixe (rodar uma vez)
+sql/migracao-03-bloqueios.sql  almoço, pausa, folga e férias (rodar uma vez)
 ```
 
 ---
@@ -72,6 +80,7 @@ Todos podem ser executados mais de uma vez sem duplicar nada.
 | `servicos` | nome, preço em centavos e duração |
 | `jornadas` | horário de trabalho por barbeiro e dia da semana |
 | `agendamentos` | quem, com quem, quando e em que status |
+| `bloqueios` | almoço, pausa, folga, férias e feriado |
 
 Decisões que valem lembrar:
 
@@ -102,12 +111,12 @@ site. Ela ignora o RLS e dá acesso total ao banco.
 - [x] 2. Login e perfis de acesso
 - [x] 3. Cadastro do estabelecimento *(dados básicos; faltam redes sociais e pagamento)*
 - [ ] 4. Upload de logo e fotos
-- [ ] 5. Perfil individual da barbearia
+- [x] 5. Perfil individual da barbearia *(faltam fotos e mapa)*
 - [x] 6. Disponibilização no catálogo *(rascunho / disponível)*
 - [x] 7. Busca real *(falta filtro por serviço e distância)*
-- [ ] 8. Agenda
-- [ ] 9. Agendamento do cliente
-- [ ] 10. Painel do estabelecimento
+- [x] 8. Agenda *(jornada, pausas, folgas e férias por barbeiro)*
+- [x] 9. Agendamento do cliente *(marcar e cancelar; falta remarcar)*
+- [x] 10. Painel do estabelecimento *(agenda, serviços, equipe, horários; faltam relatórios)*
 - [ ] 11. Funcionalidades de gestão
 - [ ] 12. Aplicativo instalável
 - [ ] 13. Testes completos

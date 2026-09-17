@@ -117,3 +117,40 @@ export function apelido(nome = '') {
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
 }
+
+// ------------------------------------------------------------
+// Menu do painel do estabelecimento
+// ------------------------------------------------------------
+export function subnav(atual) {
+  const itens = [
+    ['agenda.html',          'Agenda'],
+    ['estabelecimento.html', 'Dados'],
+    ['servicos.html',        'Serviços'],
+    ['barbeiros.html',       'Equipe'],
+    ['jornadas.html',        'Horários']
+  ];
+  return '<nav class="subnav">' + itens.map(([href, nome]) =>
+    '<a href="' + href + '"' + (href === atual ? ' class="on"' : '') + '>' + nome + '</a>'
+  ).join('') + '</nav>';
+}
+
+// Devolve o estabelecimento do usuário logado, ou null.
+export async function minhaBarbearia(sessao) {
+  const { data } = await sb
+    .from('estabelecimentos')
+    .select('id, nome, slug, cidade, status, intervalo_min')
+    .eq('dono_id', sessao.user.id)
+    .maybeSingle();
+  return data;
+}
+
+// Converte "45,00" ou "45" em 4500 centavos. Devolve null se não der.
+export function paraCentavos(texto = '') {
+  const limpo = String(texto).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  const n = Number(limpo);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+}
+
+export function deCentavos(centavos) {
+  return (Number(centavos || 0) / 100).toFixed(2).replace('.', ',');
+}

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Barbearia — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap" id="conteudo">
+    <p class="carregando">Carregando...</p>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo, moeda, duracao, escapar } from './app.js';
+
+montarTopo('buscar');
+
+const conteudo = document.getElementById('conteudo');
+const slug = new URLSearchParams(location.search).get('slug');
+
+const TESOURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
+
+function naoEncontrada(motivo) {
+  conteudo.innerHTML = '<div class="vazio" style="margin-top:60px">' +
+    '<b>Barbearia não encontrada</b><p>' + motivo + '</p>' +
+    '<a class="btn btn-solid" href="buscar.html">Ver outras barbearias</a></div>';
+}
+
+if (!slug) {
+  naoEncontrada('O endereço não traz o identificador da barbearia.');
+} else {
+  const { data: b, error } = await sb
+    .from('estabelecimentos')
+    .select('id, nome, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error) {
+    naoEncontrada(escapar(error.message));
+  } else if (!b) {
+    naoEncontrada('Ela pode ter saído do catálogo ou o endereço está errado.');
+  } else {
+    await montarPerfil(b);
+  }
+}
+
+async function montarPerfil(b) {
+  document.title = b.nome + ' — BarberHub';
+
+  const [servicos, equipe] = await Promise.all([
+    sb.from('servicos')
+      .select('id, nome, descricao, preco_centavos, duracao_min')
+      .eq('estabelecimento_id', b.id).eq('ativo', true).order('preco_centavos'),
+    sb.from('barbeiros')
+      .select('id, nome')
+      .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome')
+  ]);
+
+  const endereco = [
+    [b.logradouro, b.numero].filter(Boolean).join(', '),
+    b.bairro,
+    [b.cidade, b.uf].filter(Boolean).join(' - ')
+  ].filter(Boolean).join(' · ');
+
+  const listaServicos = (servicos.data || []).length
+    ? servicos.data.map(s =>
+        '<div class="servico-linha"><div><b>' + escapar(s.nome) + '</b>' +
+        (s.descricao ? '<p>' + escapar(s.descricao) + '</p>' : '') + '</div>' +
+        '<span>' + duracao(s.duracao_min) + ' · ' + moeda(s.preco_centavos) + '</span></div>'
+      ).join('')
+    : '<p class="legenda" style="margin-top:16px">Esta barbearia ainda não cadastrou os serviços.</p>';
+
+  const listaEquipe = (equipe.data || []).length
+    ? equipe.data.map(p =>
+        '<div class="barbeiro"><span class="avatar">' + TESOURA + '</span>' +
+        '<b>' + escapar(p.nome) + '</b></div>'
+      ).join('')
+    : '<p class="legenda" style="margin-top:16px">Equipe ainda não cadastrada.</p>';
+
+  const podeAgendar = (servicos.data || []).length && (equipe.data || []).length;
+
+  conteudo.innerHTML =
+    '<a class="voltar" href="buscar.html" style="text-align:left;margin:0 0 20px">← Voltar para a busca</a>' +
+    '<div class="perfil-capa"><span class="perfil-logo">' + TESOURA + '</span></div>' +
+    '<div class="perfil-topo">' +
+      '<div><h1>' + escapar(b.nome) + '</h1>' +
+      '<p class="perfil-endereco">' + escapar(endereco) + '</p>' +
+      (b.telefone ? '<p class="perfil-endereco">' + escapar(b.telefone) + '</p>' : '') + '</div>' +
+      (podeAgendar
+        ? '<a class="btn btn-solid" href="agendar.html?slug=' + encodeURIComponent(slug) + '">Agendar horário</a>'
+        : '') +
+    '</div>' +
+    (b.descricao ? '<p class="perfil-descricao">' + escapar(b.descricao) + '</p>' : '') +
+    '<div class="perfil-grid">' +
+      '<section><h2 class="secao-titulo">Serviços</h2>' + listaServicos + '</section>' +
+      '<section><h2 class="secao-titulo">Equipe</h2>' + listaEquipe + '</section>' +
+    '</div>';
+}
+</script>
+
+</body>
+</html>

@@ -18,7 +18,9 @@
     <h1 id="titulo">Minha barbearia</h1>
     <p class="legenda" id="legenda">Os dados abaixo formam o perfil que o cliente vê. <a href="para-estabelecimentos.html" style="color:var(--orange)">Ver como funciona</a></p>
 
-    <div class="painel" style="margin-top:28px">
+    <div id="menu"></div>
+
+    <div class="painel">
       <form id="form" novalidate>
         <div class="form-grid">
           <div class="campo larga">
@@ -67,6 +69,18 @@
           </div>
 
           <div class="campo">
+            <label for="intervalo_min">Intervalo entre horários</label>
+            <select id="intervalo_min">
+              <option value="30">De 30 em 30 minutos</option>
+              <option value="60">De 1 em 1 hora</option>
+              <option value="20">De 20 em 20 minutos</option>
+              <option value="15">De 15 em 15 minutos</option>
+              <option value="10">De 10 em 10 minutos</option>
+            </select>
+            <p class="dica">De quanto em quanto tempo os horários aparecem para o cliente.</p>
+          </div>
+
+          <div class="campo">
             <label for="status">Situação</label>
             <select id="status">
               <option value="rascunho">Rascunho — só você vê</option>
@@ -88,17 +102,18 @@
 </main>
 
 <script type="module">
-import { sb, montarTopo, exigirLogin, apelido, escapar } from './app.js';
+import { sb, montarTopo, exigirLogin, apelido, escapar, subnav } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
+document.getElementById('menu').innerHTML = subnav('estabelecimento.html');
 
 const form   = document.getElementById('form');
 const aviso  = document.getElementById('aviso');
 const salvar = document.getElementById('salvar');
 const ver    = document.getElementById('ver');
 
-const campos = ['nome','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','status'];
+const campos = ['nome','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','intervalo_min','status'];
 const el = (id) => document.getElementById(id);
 
 let existente = null;
@@ -150,6 +165,7 @@ form.addEventListener('submit', async (e) => {
   if (!valores.uf || valores.uf.length !== 2) return mostrar('O estado deve ter duas letras, como PR.');
 
   valores.uf = valores.uf.toUpperCase();
+  valores.intervalo_min = Number(valores.intervalo_min) || 30;
 
   salvar.disabled = true;
   salvar.textContent = 'Salvando...';

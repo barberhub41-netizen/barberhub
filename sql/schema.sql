@@ -49,6 +49,7 @@ create table if not exists estabelecimentos (
   uf            char(2) not null,
   latitude      double precision,
   longitude     double precision,
+  intervalo_min smallint not null default 30 check (intervalo_min in (10,15,20,30,60)),
   status        status_estabelecimento not null default 'rascunho',
   criado_em     timestamptz not null default now()
 );
@@ -112,13 +113,16 @@ create table if not exists agendamentos (
   estabelecimento_id  uuid not null references estabelecimentos(id) on delete cascade,
   barbeiro_id         uuid not null references barbeiros(id) on delete restrict,
   servico_id          uuid not null references servicos(id) on delete restrict,
-  cliente_id          uuid not null references perfis(id) on delete restrict,
+  cliente_id          uuid references perfis(id) on delete restrict,
+  cliente_nome        text,
+  cliente_telefone    text,
   inicio              timestamptz not null,
   fim                 timestamptz not null,
   status              status_agendamento not null default 'pendente',
   observacao          text,
   criado_em           timestamptz not null default now(),
-  check (fim > inicio)
+  check (fim > inicio),
+  constraint agendamentos_tem_cliente check (cliente_id is not null or cliente_nome is not null)
 );
 
 create index if not exists idx_agend_barbeiro on agendamentos (barbeiro_id, inicio);
@@ -142,6 +146,35 @@ do $$ begin
   end if;
 end $$;
 
+
+-- ------------------------------------------------------------
+-- 7. bloqueios — almoço, pausa, folga, férias, feriado
+-- Semanal (dia_semana + horas) ou pontual (inicio + fim).
+-- barbeiro_id nulo vale para toda a equipe.
+-- ------------------------------------------------------------
+create table if not exists bloqueios (
+  id                  uuid primary key default gen_random_uuid(),
+  estabelecimento_id  uuid not null references estabelecimentos(id) on delete cascade,
+  barbeiro_id         uuid references barbeiros(id) on delete cascade,
+  motivo              text,
+  dia_semana          smallint check (dia_semana between 0 and 6),
+  hora_inicio         time,
+  hora_fim            time,
+  inicio              timestamptz,
+  fim                 timestamptz,
+  criado_em           timestamptz not null default now(),
+  constraint bloqueios_modo check (
+    (dia_semana is not null and hora_inicio is not null and hora_fim is not null
+      and hora_fim > hora_inicio and inicio is null and fim is null)
+    or
+    (inicio is not null and fim is not null and fim > inicio
+      and dia_semana is null and hora_inicio is null and hora_fim is null)
+  )
+);
+
+create index if not exists idx_bloqueios_estab on bloqueios (estabelecimento_id);
+create index if not exists idx_bloqueios_barbeiro on bloqueios (barbeiro_id);
+
 -- ------------------------------------------------------------
 -- Segurança: liga o RLS em tudo.
 -- Sem políticas criadas, a API pública não lê nem escreve nada.
@@ -153,6 +186,7 @@ alter table barbeiros         enable row level security;
 alter table servicos          enable row level security;
 alter table jornadas          enable row level security;
 alter table agendamentos      enable row level security;
+alter table bloqueios         enable row level security;
 
 -- ------------------------------------------------------------
 -- Cria o perfil automaticamente quando alguém se cadastra

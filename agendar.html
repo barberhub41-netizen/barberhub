@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agendar — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap" id="conteudo">
+    <p class="carregando">Carregando...</p>
+  </div>
+</main>
+
+<template id="modelo">
+  <a class="voltar" id="voltar" style="text-align:left;margin:0 0 20px">← Voltar para o perfil</a>
+  <h1 id="titulo">Agendar</h1>
+  <p class="legenda" id="legenda"></p>
+
+  <div class="painel" style="max-width:760px;margin-top:28px">
+    <div class="campo" style="margin-top:0">
+      <label for="servico">1. Serviço</label>
+      <select id="servico"></select>
+    </div>
+
+    <div class="campo">
+      <label for="profissional">2. Profissional</label>
+      <select id="profissional"></select>
+    </div>
+
+    <div class="campo">
+      <label for="data">3. Dia</label>
+      <input id="data" type="date" />
+    </div>
+
+    <div class="campo">
+      <label>4. Horário</label>
+      <div id="horarios"><p class="carregando" style="padding:20px 0">Escolha um dia.</p></div>
+    </div>
+
+    <div class="aviso" id="aviso" role="status"></div>
+
+    <div class="acoes">
+      <button class="btn btn-solid" id="confirmar" disabled>Confirmar agendamento</button>
+    </div>
+  </div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, sessaoAtual, moeda, duracao, escapar } from './app.js';
+
+montarTopo('buscar');
+
+const conteudo = document.getElementById('conteudo');
+const slug = new URLSearchParams(location.search).get('slug');
+const DIAS_A_FRENTE = 60;
+
+function erro(msg) {
+  conteudo.innerHTML = '<div class="vazio" style="margin-top:60px"><b>Não deu para abrir a agenda</b>' +
+    '<p>' + msg + '</p><a class="btn btn-solid" href="buscar.html">Ver barbearias</a></div>';
+}
+
+if (!slug) {
+  erro('O endereço não traz o identificador da barbearia.');
+} else {
+  const { data: b } = await sb.from('estabelecimentos')
+    .select('id, nome, slug, cidade, intervalo_min').eq('slug', slug).maybeSingle();
+
+  if (!b) {
+    erro('Essa barbearia não está mais no catálogo.');
+  } else {
+    const [servicos, equipe] = await Promise.all([
+      sb.from('servicos').select('id, nome, preco_centavos, duracao_min')
+        .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome'),
+      sb.from('barbeiros').select('id, nome')
+        .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome')
+    ]);
+
+    if (!servicos.data?.length || !equipe.data?.length) {
+      erro('Esta barbearia ainda não cadastrou serviços ou equipe.');
+    } else {
+      conteudo.innerHTML = '';
+      conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+      iniciar(b, servicos.data, equipe.data);
+    }
+  }
+}
+
+function iniciar(barbearia, servicos, equipe) {
+  const elServico = document.getElementById('servico');
+  const elProf    = document.getElementById('profissional');
+  const elData    = document.getElementById('data');
+  const elHoras   = document.getElementById('horarios');
+  const aviso     = document.getElementById('aviso');
+  const confirmar = document.getElementById('confirmar');
+
+  document.title = 'Agendar — ' + barbearia.nome;
+  document.getElementById('titulo').textContent = barbearia.nome;
+  document.getElementById('legenda').textContent = 'Escolha o serviço, o profissional e o horário.';
+  document.getElementById('voltar').href = 'barbearia.html?slug=' + encodeURIComponent(barbearia.slug);
+
+  let escolhido = null;   // Date do horário selecionado
+  const PASSO = barbearia.intervalo_min || 30;   // definido pela barbearia
+
+  const mostrar = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
+
+  elServico.innerHTML = servicos.map(s =>
+    '<option value="' + s.id + '">' + escapar(s.nome) + ' — ' +
+    duracao(s.duracao_min) + ' · ' + moeda(s.preco_centavos) + '</option>').join('');
+
+  elProf.innerHTML = equipe.map(p =>
+    '<option value="' + p.id + '">' + escapar(p.nome) + '</option>').join('');
+
+  // limites do campo de data
+  const hoje = new Date();
+  const limite = new Date(hoje.getTime() + DIAS_A_FRENTE * 86400000);
+  elData.min = iso(hoje);
+  elData.max = iso(limite);
+  elData.value = iso(hoje);
+
+  function iso(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  // retoma a escolha se o cliente foi fazer login no meio do caminho
+  const guardado = sessionStorage.getItem('barberhub:agendamento');
+  if (guardado) {
+    try {
+      const g = JSON.parse(guardado);
+      if (g.slug === barbearia.slug) {
+        if (servicos.some(s => s.id === g.servico)) elServico.value = g.servico;
+        if (equipe.some(p => p.id === g.profissional)) elProf.value = g.profissional;
+        if (g.data >= elData.min) elData.value = g.data;
+      }
+    } catch (e) { /* ignora */ }
+    sessionStorage.removeItem('barberhub:agendamento');
+  }
+
+  // ------------------------------------------------------------
+  // Cálculo dos horários livres
+  // ------------------------------------------------------------
+  async function calcular() {
+    escolhido = null;
+    confirmar.disabled = true;
+    elHoras.innerHTML = '<p class="carregando" style="padding:20px 0">Procurando horários...</p>';
+
+    const servico = servicos.find(s => s.id === elServico.value);
+    const dia = elData.value;
+    if (!servico || !dia) return;
+
+    const inicioDia = new Date(dia + 'T00:00:00');
+    const fimDia    = new Date(dia + 'T23:59:59');
+    const diaSemana = inicioDia.getDay();
+
+    const [jornadas, ocupados, bloqueios] = await Promise.all([
+      sb.from('jornadas').select('hora_inicio, hora_fim')
+        .eq('barbeiro_id', elProf.value).eq('dia_semana', diaSemana)
+        .order('hora_inicio'),
+      sb.from('agendamentos').select('inicio, fim')
+        .eq('barbeiro_id', elProf.value)
+        .in('status', ['pendente', 'confirmado'])
+        .gte('inicio', inicioDia.toISOString())
+        .lte('inicio', fimDia.toISOString()),
+      sb.from('bloqueios').select('barbeiro_id, dia_semana, hora_inicio, hora_fim, inicio, fim')
+        .eq('estabelecimento_id', barbearia.id)
+    ]);
+
+    if (!jornadas.data?.length) {
+      elHoras.innerHTML = '<p class="legenda" style="padding:14px 0">' +
+        'Esse profissional não atende nesse dia. Tente outra data.</p>';
+      return;
+    }
+
+    const marcados = (ocupados.data || []).map(a => [new Date(a.inicio), new Date(a.fim)]);
+
+    // bloqueios do dia: almoço, pausa, folga, feriado
+    (bloqueios.data || []).forEach(b => {
+      if (b.barbeiro_id && b.barbeiro_id !== elProf.value) return;   // é de outro profissional
+      if (b.dia_semana !== null && b.dia_semana !== undefined) {
+        if (b.dia_semana !== diaSemana) return;
+        marcados.push([
+          new Date(dia + 'T' + String(b.hora_inicio).slice(0, 8)),
+          new Date(dia + 'T' + String(b.hora_fim).slice(0, 8))
+        ]);
+      } else {
+        marcados.push([new Date(b.inicio), new Date(b.fim)]);
+      }
+    });
+    const agora = new Date();
+    const vagas = [];
+
+    for (const j of jornadas.data) {
+      const abre  = new Date(dia + 'T' + String(j.hora_inicio).slice(0, 8));
+      const fecha = new Date(dia + 'T' + String(j.hora_fim).slice(0, 8));
+
+      for (let t = new Date(abre); t < fecha; t = new Date(t.getTime() + PASSO * 60000)) {
+        const termina = new Date(t.getTime() + servico.duracao_min * 60000);
+        if (termina > fecha) break;            // não cabe antes de fechar
+        if (t <= agora) continue;              // horário já passou
+        const conflita = marcados.some(([i, f]) => t < f && termina > i);
+        if (!conflita) vagas.push(new Date(t));
+      }
+    }
+
+    if (!vagas.length) {
+      elHoras.innerHTML = '<p class="legenda" style="padding:14px 0">' +
+        'Nenhum horário livre nesse dia para esse serviço. Tente outra data ou outro profissional.</p>';
+      return;
+    }
+
+    elHoras.innerHTML = '<div class="chips" style="justify-content:flex-start;margin-top:4px">' +
+      vagas.map(v => '<button type="button" class="chip" data-hora="' + v.toISOString() + '">' +
+        String(v.getHours()).padStart(2, '0') + ':' +
+        String(v.getMinutes()).padStart(2, '0') + '</button>').join('') + '</div>';
+  }
+
+  elHoras.addEventListener('click', (e) => {
+    const botao = e.target.closest('[data-hora]');
+    if (!botao) return;
+    elHoras.querySelectorAll('.chip').forEach(c => c.style.borderColor = '');
+    botao.style.borderColor = 'var(--orange)';
+    botao.style.color = 'var(--orange)';
+    escolhido = new Date(botao.dataset.hora);
+    confirmar.disabled = false;
+    aviso.className = 'aviso';
+  });
+
+  // ------------------------------------------------------------
+  // Confirmação
+  // ------------------------------------------------------------
+  confirmar.addEventListener('click', async () => {
+    if (!escolhido) return mostrar('Escolha um horário.');
+
+    const sessao = await sessaoAtual();
+    if (!sessao) {
+      // guarda a escolha e manda fazer login; volta para cá depois
+      sessionStorage.setItem('barberhub:agendamento', JSON.stringify({
+        slug: barbearia.slug,
+        servico: elServico.value,
+        profissional: elProf.value,
+        data: elData.value
+      }));
+      const volta = 'agendar.html?slug=' + encodeURIComponent(barbearia.slug);
+      location.href = 'entrar.html?voltar=' + encodeURIComponent(volta);
+      return;
+    }
+
+    const servico = servicos.find(s => s.id === elServico.value);
+    const fim = new Date(escolhido.getTime() + servico.duracao_min * 60000);
+
+    confirmar.disabled = true;
+    confirmar.textContent = 'Confirmando...';
+
+    const { error } = await sb.from('agendamentos').insert({
+      estabelecimento_id: barbearia.id,
+      barbeiro_id: elProf.value,
+      servico_id: servico.id,
+      cliente_id: sessao.user.id,
+      inicio: escolhido.toISOString(),
+      fim: fim.toISOString()
+    });
+
+    confirmar.textContent = 'Confirmar agendamento';
+
+    if (error) {
+      // a trava do banco devolve erro quando alguém pegou o horário antes
+      const ocupado = /conflito|exclusion|overlap/i.test(error.message);
+      mostrar(ocupado
+        ? 'Esse horário acabou de ser preenchido por outra pessoa. Escolha outro.'
+        : 'Não foi possível agendar: ' + error.message);
+      calcular();
+      return;
+    }
+
+    location.href = 'meus-agendamentos.html';
+  });
+
+  elServico.addEventListener('change', calcular);
+  elProf.addEventListener('change', calcular);
+  elData.addEventListener('change', calcular);
+  calcular();
+}
+</script>
+
+</body>
+</html>

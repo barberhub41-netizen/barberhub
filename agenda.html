@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agenda — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Agenda</h1>
+    <p class="legenda">Arraste um atendimento para mudar o horário, puxe a borda de baixo para esticar, ou clique num espaço vazio para encaixar alguém.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="barra">
+    <button class="btn btn-outline" id="ontem" type="button">←</button>
+    <input id="data" type="date" class="entrada-data" />
+    <button class="btn btn-outline" id="amanha" type="button">→</button>
+    <button class="btn btn-outline" id="hoje" type="button">Hoje</button>
+    <select id="filtro" class="entrada-data"></select>
+    <span id="resumo" style="color:var(--muted);font-size:14px"></span>
+  </div>
+  <div id="calendario"></div>
+</template>
+
+<div class="janela" id="janela" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" id="fechar" aria-label="Fechar">×</button>
+    <h2 id="j-titulo">Encaixe</h2>
+    <p class="legenda" id="j-legenda"></p>
+
+    <div class="campo">
+      <label for="j-servico">Serviço</label>
+      <select id="j-servico"></select>
+    </div>
+
+    <div class="campo" id="campo-profissional">
+      <label for="j-profissional">Profissional</label>
+      <select id="j-profissional"></select>
+    </div>
+
+    <div class="form-grid">
+      <div class="campo">
+        <label for="j-hora">Começa às</label>
+        <input id="j-hora" type="time" step="300" />
+      </div>
+      <div class="campo">
+        <label for="j-duracao">Duração (min)</label>
+        <input id="j-duracao" type="number" min="5" max="600" step="5" />
+      </div>
+    </div>
+
+    <div id="campos-cliente">
+      <div class="campo">
+        <label for="j-nome">Cliente</label>
+        <input id="j-nome" type="text" placeholder="Nome de quem vai ser atendido" />
+      </div>
+      <div class="campo">
+        <label for="j-telefone">Telefone</label>
+        <input id="j-telefone" type="tel" placeholder="(41) 90000-0000" />
+      </div>
+    </div>
+
+    <div class="campo">
+      <label for="j-status">Situação</label>
+      <select id="j-status">
+        <option value="pendente">Pendente</option>
+        <option value="confirmado">Confirmado</option>
+        <option value="concluido">Concluído</option>
+        <option value="faltou">Não compareceu</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+    </div>
+
+    <div class="aviso" id="j-aviso" role="status"></div>
+
+    <div class="acoes">
+      <button class="btn btn-solid" id="j-salvar">Salvar</button>
+      <button class="btn btn-outline" id="j-cancelar">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, subnav, minhaBarbearia, moeda, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+document.getElementById('menu').innerHTML = subnav('agenda.html');
+
+const PX_MIN = 1.5;    // altura de um minuto, em pixels
+const SNAP   = 5;      // arrastar encaixa de 5 em 5 minutos
+
+const conteudo  = document.getElementById('conteudo');
+const barbearia = await minhaBarbearia(sessao);
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  const [equipe, servicos] = await Promise.all([
+    sb.from('barbeiros').select('id, nome').eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome'),
+    sb.from('servicos').select('id, nome, preco_centavos, duracao_min').eq('estabelecimento_id', barbearia.id).order('nome')
+  ]);
+
+  if (!equipe.data?.length) {
+    conteudo.innerHTML = '<div class="vazio"><b>Cadastre a equipe primeiro</b>' +
+      '<a class="btn btn-solid" href="barbeiros.html">Cadastrar equipe</a></div>';
+  } else {
+    conteudo.innerHTML = '';
+    conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+    iniciar(equipe.data, servicos.data || []);
+  }
+}
+
+function iniciar(equipe, servicos) {
+  const elData   = document.getElementById('data');
+  const elFiltro = document.getElementById('filtro');
+  const elCal    = document.getElementById('calendario');
+  const elResumo = document.getElementById('resumo');
+
+  const janela   = document.getElementById('janela');
+  const jTitulo  = document.getElementById('j-titulo');
+  const jLegenda = document.getElementById('j-legenda');
+  const jServico = document.getElementById('j-servico');
+  const jProf    = document.getElementById('j-profissional');
+  const jHora    = document.getElementById('j-hora');
+  const jDuracao = document.getElementById('j-duracao');
+  const jNome    = document.getElementById('j-nome');
+  const jFone    = document.getElementById('j-telefone');
+  const jStatus  = document.getElementById('j-status');
+  const jAviso   = document.getElementById('j-aviso');
+  const jSalvar  = document.getElementById('j-salvar');
+
+  let dados = [];       // agendamentos do dia
+  let jornadas = [];    // faixas de trabalho do dia
+  let bloqueios = [];   // pausas e folgas que valem nesse dia
+  let editando = null;  // id em edição, ou null quando é encaixe novo
+  let inicioGrade = 8, fimGrade = 20;
+
+  elFiltro.innerHTML = '<option value="">Todos</option>' +
+    equipe.map(b => '<option value="' + b.id + '">' + escapar(b.nome) + '</option>').join('');
+
+  jServico.innerHTML = servicos.map(s =>
+    '<option value="' + s.id + '" data-duracao="' + s.duracao_min + '">' +
+    escapar(s.nome) + ' — ' + s.duracao_min + ' min · ' + moeda(s.preco_centavos) + '</option>').join('');
+
+  jProf.innerHTML = equipe.map(b =>
+    '<option value="' + b.id + '">' + escapar(b.nome) + '</option>').join('');
+
+  // ------------------------------------------------------------
+  // utilidades de data
+  // ------------------------------------------------------------
+  const iso = (d) => d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+  const hhmm = (d) => String(d.getHours()).padStart(2, '0') + ':' +
+                      String(d.getMinutes()).padStart(2, '0');
+  const minutosDoDia = (d) => d.getHours() * 60 + d.getMinutes();
+  const dataDoDia = (min) => new Date(elData.value + 'T00:00:00').getTime() + min * 60000;
+
+  elData.value = iso(new Date());
+
+  function mover(dias) {
+    const d = new Date(elData.value + 'T12:00:00');
+    d.setDate(d.getDate() + dias);
+    elData.value = iso(d);
+    carregar();
+  }
+
+  // ------------------------------------------------------------
+  // carregar o dia
+  // ------------------------------------------------------------
+  async function carregar() {
+    elCal.innerHTML = '<p class="carregando">Carregando...</p>';
+
+    const de  = new Date(elData.value + 'T00:00:00');
+    const ate = new Date(elData.value + 'T23:59:59');
+    const diaSemana = de.getDay();
+
+    const visiveis = elFiltro.value ? equipe.filter(b => b.id === elFiltro.value) : equipe;
+    const ids = visiveis.map(b => b.id);
+
+    const [ag, jo, bl] = await Promise.all([
+      sb.from('agendamentos')
+        .select('id, inicio, fim, status, barbeiro_id, servico_id, cliente_nome, cliente_telefone, servicos(nome, preco_centavos), perfis(nome, telefone)')
+        .eq('estabelecimento_id', barbearia.id)
+        .gte('inicio', de.toISOString()).lte('inicio', ate.toISOString())
+        .order('inicio'),
+      sb.from('jornadas')
+        .select('barbeiro_id, hora_inicio, hora_fim')
+        .in('barbeiro_id', ids).eq('dia_semana', diaSemana),
+      sb.from('bloqueios')
+        .select('barbeiro_id, motivo, dia_semana, hora_inicio, hora_fim, inicio, fim')
+        .eq('estabelecimento_id', barbearia.id)
+    ]);
+
+    if (ag.error) {
+      elCal.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(ag.error.message) + '</p></div>';
+      return;
+    }
+
+    dados = (ag.data || []).filter(a => ids.includes(a.barbeiro_id));
+    jornadas = jo.data || [];
+
+    // converte os bloqueios em faixas de minutos desse dia
+    bloqueios = [];
+    (bl.data || []).forEach(b => {
+      const dono = b.barbeiro_id;
+      if (b.dia_semana !== null && b.dia_semana !== undefined) {
+        if (b.dia_semana !== diaSemana) return;
+        bloqueios.push({
+          barbeiro_id: dono, motivo: b.motivo,
+          de: Number(String(b.hora_inicio).slice(0,2)) * 60 + Number(String(b.hora_inicio).slice(3,5)),
+          ate: Number(String(b.hora_fim).slice(0,2)) * 60 + Number(String(b.hora_fim).slice(3,5))
+        });
+      } else {
+        const i = new Date(b.inicio), f = new Date(b.fim);
+        if (f <= de || i >= ate) return;
+        bloqueios.push({
+          barbeiro_id: dono, motivo: b.motivo,
+          de: i < de ? 0 : minutosDoDia(i),
+          ate: f > ate ? 24 * 60 : minutosDoDia(f)
+        });
+      }
+    });
+
+    // a grade cobre a jornada do dia, com folga de uma hora de cada lado
+    let min = 24 * 60, max = 0;
+    jornadas.forEach(j => {
+      min = Math.min(min, Number(String(j.hora_inicio).slice(0, 2)) * 60 + Number(String(j.hora_inicio).slice(3, 5)));
+      max = Math.max(max, Number(String(j.hora_fim).slice(0, 2)) * 60 + Number(String(j.hora_fim).slice(3, 5)));
+    });
+    dados.forEach(a => {
+      min = Math.min(min, minutosDoDia(new Date(a.inicio)));
+      max = Math.max(max, minutosDoDia(new Date(a.fim)));
+    });
+    if (min > max) { min = 8 * 60; max = 20 * 60; }
+    inicioGrade = Math.max(0, Math.floor(min / 60) - 1);
+    fimGrade    = Math.min(24, Math.ceil(max / 60) + 1);
+
+    desenhar(visiveis);
+  }
+
+  // ------------------------------------------------------------
+  // desenhar a grade
+  // ------------------------------------------------------------
+  function desenhar(visiveis) {
+    const altura = (fimGrade - inicioGrade) * 60 * PX_MIN;
+    const topo = (min) => (min - inicioGrade * 60) * PX_MIN;
+
+    let horas = '';
+    for (let h = inicioGrade; h <= fimGrade; h++) {
+      horas += '<span style="top:' + topo(h * 60) + 'px">' + String(h).padStart(2, '0') + ':00</span>';
+    }
+
+    const colunas = visiveis.map(b => {
+      let dentro = '';
+      for (let h = inicioGrade; h <= fimGrade; h++) {
+        dentro += '<div class="hora-linha" style="top:' + topo(h * 60) + 'px"></div>';
+        dentro += '<div class="meia-linha" style="top:' + topo(h * 60 + 30) + 'px"></div>';
+      }
+
+      // faixas fora da jornada
+      const minhas = jornadas.filter(j => j.barbeiro_id === b.id)
+        .map(j => [
+          Number(String(j.hora_inicio).slice(0,2)) * 60 + Number(String(j.hora_inicio).slice(3,5)),
+          Number(String(j.hora_fim).slice(0,2)) * 60 + Number(String(j.hora_fim).slice(3,5))
+        ]).sort((x, y) => x[0] - y[0]);
+
+      let cursor = inicioGrade * 60;
+      minhas.forEach(([i, f]) => {
+        if (i > cursor) dentro += faixaFora(topo(cursor), (i - cursor) * PX_MIN);
+        cursor = Math.max(cursor, f);
+      });
+      if (cursor < fimGrade * 60) dentro += faixaFora(topo(cursor), (fimGrade * 60 - cursor) * PX_MIN);
+
+      // pausas e folgas
+      bloqueios.filter(x => !x.barbeiro_id || x.barbeiro_id === b.id).forEach(x => {
+        dentro += '<div class="bloqueio" style="top:' + topo(x.de) + 'px;height:' +
+          Math.max(14, (x.ate - x.de) * PX_MIN) + 'px"><span>' +
+          escapar(x.motivo || 'Bloqueado') + '</span></div>';
+      });
+
+      // linha da hora atual
+      if (elData.value === iso(new Date())) {
+        const agora = minutosDoDia(new Date());
+        if (agora >= inicioGrade * 60 && agora <= fimGrade * 60) {
+          dentro += '<div class="agora" style="top:' + topo(agora) + 'px"></div>';
+        }
+      }
+
+      dados.filter(a => a.barbeiro_id === b.id).forEach(a => {
+        const i = new Date(a.inicio), f = new Date(a.fim);
+        const dur = Math.round((f - i) / 60000);
+        const cliente = a.perfis?.nome || a.cliente_nome || 'Cliente';
+        dentro += '<div class="bloco ' + a.status + '" data-id="' + a.id + '" ' +
+          'style="top:' + topo(minutosDoDia(i)) + 'px;height:' + Math.max(22, dur * PX_MIN - 2) + 'px">' +
+          '<b>' + hhmm(i) + ' ' + escapar(cliente) + '</b>' +
+          '<span>' + escapar(a.servicos?.nome || '') + ' · ' + dur + ' min</span>' +
+          '<div class="puxador"></div></div>';
+      });
+
+      return '<div class="coluna" data-barbeiro="' + b.id + '" style="height:' + altura + 'px">' + dentro + '</div>';
+    }).join('');
+
+    elCal.innerHTML =
+      '<div class="tl-head"><div class="tl-espaco"></div>' +
+      visiveis.map(b => '<div class="tl-col-head">' + escapar(b.nome) + '</div>').join('') + '</div>' +
+      '<div class="timeline"><div class="gutter" style="height:' + altura + 'px">' + horas + '</div>' +
+      colunas + '</div>';
+
+    const ativos = dados.filter(a => !['cancelado', 'faltou'].includes(a.status));
+    const soma = ativos.reduce((t, a) => t + (a.servicos?.preco_centavos || 0), 0);
+    elResumo.textContent = ativos.length + ' atendimento' + (ativos.length === 1 ? '' : 's') +
+      ' · ' + moeda(soma);
+
+    ligarArraste();
+  }
+
+  const faixaFora = (topo, altura) =>
+    '<div class="fora" style="top:' + topo + 'px;height:' + altura + 'px"></div>';
+
+  // ------------------------------------------------------------
+  // arrastar e redimensionar
+  // ------------------------------------------------------------
+  function ligarArraste() {
+    elCal.querySelectorAll('.bloco').forEach(bloco => {
+      bloco.addEventListener('pointerdown', (e) => {
+        const redimensionando = e.target.classList.contains('puxador');
+        const a = dados.find(x => x.id === bloco.dataset.id);
+        if (!a) return;
+
+        e.preventDefault();
+        bloco.setPointerCapture(e.pointerId);
+        bloco.classList.add('movendo');
+
+        const yInicial = e.clientY;
+        const topoInicial = parseFloat(bloco.style.top);
+        const alturaInicial = parseFloat(bloco.style.height);
+        let deslocamento = 0;
+        let arrastou = false;
+
+        const aoMover = (ev) => {
+          const dy = ev.clientY - yInicial;
+          if (Math.abs(dy) > 3) arrastou = true;
+          deslocamento = Math.round(dy / PX_MIN / SNAP) * SNAP;
+          if (redimensionando) {
+            bloco.style.height = Math.max(SNAP * PX_MIN, alturaInicial + deslocamento * PX_MIN) + 'px';
+          } else {
+            bloco.style.top = Math.max(0, topoInicial + deslocamento * PX_MIN) + 'px';
+          }
+        };
+
+        const aoSoltar = async () => {
+          bloco.removeEventListener('pointermove', aoMover);
+          bloco.removeEventListener('pointerup', aoSoltar);
+          bloco.classList.remove('movendo');
+
+          if (!arrastou) { abrirEdicao(a); return; }
+          if (!deslocamento) { carregar(); return; }
+
+          const i = new Date(a.inicio), f = new Date(a.fim);
+          const novo = redimensionando
+            ? { fim: new Date(f.getTime() + deslocamento * 60000).toISOString() }
+            : { inicio: new Date(i.getTime() + deslocamento * 60000).toISOString(),
+                fim:    new Date(f.getTime() + deslocamento * 60000).toISOString() };
+
+          if (redimensionando && new Date(novo.fim) <= i) {
+            alert('A duração não pode ficar zerada.');
+            carregar();
+            return;
+          }
+
+          const { error } = await sb.from('agendamentos').update(novo).eq('id', a.id);
+          if (error) avisarConflito(error);
+          carregar();
+        };
+
+        bloco.addEventListener('pointermove', aoMover);
+        bloco.addEventListener('pointerup', aoSoltar);
+      });
+    });
+
+    // clique no vazio abre o encaixe
+    elCal.querySelectorAll('.coluna').forEach(coluna => {
+      coluna.addEventListener('click', (e) => {
+        if (e.target.closest('.bloco')) return;
+        if (!servicos.length) {
+          alert('Cadastre pelo menos um serviço antes de encaixar alguém.');
+          return;
+        }
+        const y = e.clientY - coluna.getBoundingClientRect().top;
+        const minuto = Math.round((y / PX_MIN + inicioGrade * 60) / SNAP) * SNAP;
+        abrirEncaixe(coluna.dataset.barbeiro, minuto);
+      });
+    });
+  }
+
+  function avisarConflito(error) {
+    alert(/conflito|exclusion|overlap/i.test(error.message)
+      ? 'Não cabe aí: esse profissional já tem outro atendimento nesse intervalo.'
+      : 'Não foi possível salvar: ' + error.message);
+  }
+
+  // ------------------------------------------------------------
+  // janela de encaixe e edição
+  // ------------------------------------------------------------
+  function abrir() { janela.hidden = false; jAviso.className = 'aviso'; }
+  function fechar() { janela.hidden = true; editando = null; }
+
+  function abrirEncaixe(barbeiroId, minuto) {
+    editando = null;
+    jTitulo.textContent = 'Encaixar atendimento';
+    jLegenda.textContent = 'Para quem chegou sem agendar.';
+    document.getElementById('campos-cliente').style.display = '';
+    document.getElementById('campo-profissional').style.display = '';
+    jProf.value = barbeiroId;
+    jServico.selectedIndex = 0;
+    jDuracao.value = jServico.selectedOptions[0]?.dataset.duracao || 30;
+    jHora.value = String(Math.floor(minuto / 60)).padStart(2, '0') + ':' +
+                  String(minuto % 60).padStart(2, '0');
+    jNome.value = '';
+    jFone.value = '';
+    jStatus.value = 'confirmado';
+    abrir();
+  }
+
+  function abrirEdicao(a) {
+    editando = a.id;
+    const i = new Date(a.inicio), f = new Date(a.fim);
+    jTitulo.textContent = a.perfis?.nome || a.cliente_nome || 'Atendimento';
+    jLegenda.textContent = a.perfis
+      ? 'Cliente com conta na plataforma. Telefone: ' + (a.perfis.telefone || 'não informado')
+      : 'Encaixe lançado pela barbearia.';
+    document.getElementById('campos-cliente').style.display = a.perfis ? 'none' : '';
+    document.getElementById('campo-profissional').style.display = '';
+    jProf.value = a.barbeiro_id;
+    jServico.value = a.servico_id;
+    jHora.value = hhmm(i);
+    jDuracao.value = Math.round((f - i) / 60000);
+    jNome.value = a.cliente_nome || '';
+    jFone.value = a.cliente_telefone || '';
+    jStatus.value = a.status;
+    abrir();
+  }
+
+  jServico.addEventListener('change', () => {
+    const d = jServico.selectedOptions[0]?.dataset.duracao;
+    if (d && !editando) jDuracao.value = d;
+  });
+
+  jSalvar.addEventListener('click', async () => {
+    const servico = servicos.find(s => s.id === jServico.value);
+    const minutos = Number(jDuracao.value);
+    const [h, m] = (jHora.value || '').split(':').map(Number);
+
+    if (!servico) { jAviso.textContent = 'Escolha um serviço.'; jAviso.className = 'aviso erro'; return; }
+    if (!Number.isFinite(h)) { jAviso.textContent = 'Informe o horário.'; jAviso.className = 'aviso erro'; return; }
+    if (!minutos || minutos < 5) { jAviso.textContent = 'Duração mínima de 5 minutos.'; jAviso.className = 'aviso erro'; return; }
+
+    const inicio = new Date(dataDoDia(h * 60 + m));
+    const fim = new Date(inicio.getTime() + minutos * 60000);
+
+    jSalvar.disabled = true;
+    let error;
+
+    if (editando) {
+      ({ error } = await sb.from('agendamentos').update({
+        barbeiro_id: jProf.value, servico_id: servico.id,
+        inicio: inicio.toISOString(), fim: fim.toISOString(),
+        status: jStatus.value,
+        cliente_nome: jNome.value.trim() || null,
+        cliente_telefone: jFone.value.trim() || null
+      }).eq('id', editando));
+    } else {
+      if (!jNome.value.trim()) {
+        jAviso.textContent = 'Informe o nome do cliente.';
+        jAviso.className = 'aviso erro';
+        jSalvar.disabled = false;
+        return;
+      }
+      ({ error } = await sb.from('agendamentos').insert({
+        estabelecimento_id: barbearia.id,
+        barbeiro_id: jProf.value,
+        servico_id: servico.id,
+        inicio: inicio.toISOString(), fim: fim.toISOString(),
+        status: jStatus.value,
+        cliente_nome: jNome.value.trim(),
+        cliente_telefone: jFone.value.trim() || null
+      }));
+    }
+
+    jSalvar.disabled = false;
+
+    if (error) {
+      jAviso.textContent = /conflito|exclusion|overlap/i.test(error.message)
+        ? 'Não cabe aí: esse profissional já tem outro atendimento nesse intervalo.'
+        : 'Não foi possível salvar: ' + error.message;
+      jAviso.className = 'aviso erro';
+      return;
+    }
+
+    fechar();
+    carregar();
+  });
+
+  document.getElementById('fechar').addEventListener('click', fechar);
+  document.getElementById('j-cancelar').addEventListener('click', fechar);
+  janela.addEventListener('click', (e) => { if (e.target === janela) fechar(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !janela.hidden) fechar(); });
+
+  document.getElementById('ontem').addEventListener('click', () => mover(-1));
+  document.getElementById('amanha').addEventListener('click', () => mover(1));
+  document.getElementById('hoje').addEventListener('click', () => { elData.value = iso(new Date()); carregar(); });
+  elData.addEventListener('change', carregar);
+  elFiltro.addEventListener('change', carregar);
+
+  carregar();
+}
+</script>
+
+</body>
+</html>

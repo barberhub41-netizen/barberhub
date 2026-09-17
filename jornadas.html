@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Horários — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Horários de trabalho</h1>
+    <p class="legenda">A jornada de cada profissional. É a partir dela que os horários livres são calculados.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="painel" style="max-width:860px">
+    <div class="campo" style="margin-top:0">
+      <label for="barbeiro">Profissional</label>
+      <select id="barbeiro"></select>
+    </div>
+
+    <form id="novo" style="margin-top:22px">
+      <div class="linha-form">
+        <div class="campo">
+          <label for="dia">Dia</label>
+          <select id="dia">
+            <option value="uteis">Segunda a sexta</option>
+            <option value="todos">Todos os dias</option>
+            <option value="1">Segunda-feira</option>
+            <option value="2">Terça-feira</option>
+            <option value="3">Quarta-feira</option>
+            <option value="4">Quinta-feira</option>
+            <option value="5">Sexta-feira</option>
+            <option value="6">Sábado</option>
+            <option value="0">Domingo</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="inicio">Entrada</label>
+          <input id="inicio" type="time" value="09:00" step="300" />
+        </div>
+        <div class="campo">
+          <label for="fim">Saída</label>
+          <input id="fim" type="time" value="18:00" step="300" />
+        </div>
+        <button class="btn btn-solid" type="submit" id="adicionar">Adicionar</button>
+      </div>
+      <p class="dica" style="color:var(--dim);font-size:12.5px;margin-top:10px">
+        Para intervalo de almoço, cadastre duas faixas no mesmo dia — por exemplo 09:00 às 12:00 e 13:30 às 19:00.
+      </p>
+      <div class="aviso" id="aviso" role="status"></div>
+    </form>
+  </div>
+
+  <div id="lista" style="margin-top:28px"></div>
+
+  <h2 class="secao-titulo" style="margin-top:48px">Pausas e bloqueios</h2>
+  <p class="legenda" style="margin-bottom:18px">Almoço, pausa, folga, férias ou feriado. O horário some da agenda do cliente.</p>
+
+  <div class="painel" style="max-width:860px">
+    <form id="novo-bloqueio">
+      <div class="campo" style="margin-top:0">
+        <label for="b-tipo">Tipo</label>
+        <select id="b-tipo">
+          <option value="semanal">Toda semana (almoço, pausa)</option>
+          <option value="pontual">Data específica (folga, férias, feriado)</option>
+        </select>
+      </div>
+
+      <div id="b-semanal">
+        <div class="linha-form" style="margin-top:14px">
+          <div class="campo">
+            <label for="b-dia">Dia</label>
+            <select id="b-dia">
+              <option value="uteis">Segunda a sexta</option>
+              <option value="todos">Todos os dias</option>
+              <option value="1">Segunda-feira</option>
+              <option value="2">Terça-feira</option>
+              <option value="3">Quarta-feira</option>
+              <option value="4">Quinta-feira</option>
+              <option value="5">Sexta-feira</option>
+              <option value="6">Sábado</option>
+              <option value="0">Domingo</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="b-inicio">Das</label>
+            <input id="b-inicio" type="time" value="12:00" step="300" />
+          </div>
+          <div class="campo">
+            <label for="b-fim">Até</label>
+            <input id="b-fim" type="time" value="13:30" step="300" />
+          </div>
+          <span></span>
+        </div>
+      </div>
+
+      <div id="b-pontual" style="display:none">
+        <div class="form-grid" style="margin-top:14px">
+          <div class="campo">
+            <label for="b-data-ini">De</label>
+            <input id="b-data-ini" type="datetime-local" />
+          </div>
+          <div class="campo">
+            <label for="b-data-fim">Até</label>
+            <input id="b-data-fim" type="datetime-local" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-top:6px">
+        <div class="campo">
+          <label for="b-quem">Vale para</label>
+          <select id="b-quem"></select>
+        </div>
+        <div class="campo">
+          <label for="b-motivo">Motivo</label>
+          <input id="b-motivo" type="text" placeholder="Almoço" />
+        </div>
+      </div>
+
+      <div class="aviso" id="b-aviso" role="status"></div>
+      <div class="acoes"><button class="btn btn-solid" type="submit" id="b-adicionar">Adicionar bloqueio</button></div>
+    </form>
+  </div>
+
+  <div id="lista-bloqueios" style="margin-top:22px"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, subnav, minhaBarbearia, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+document.getElementById('menu').innerHTML = subnav('jornadas.html');
+
+const NOMES = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+const conteudo = document.getElementById('conteudo');
+const barbearia = await minhaBarbearia(sessao);
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<p>Os horários pertencem aos profissionais de um estabelecimento.</p>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  const { data: equipe } = await sb
+    .from('barbeiros').select('id, nome')
+    .eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome');
+
+  if (!equipe || !equipe.length) {
+    conteudo.innerHTML = '<div class="vazio"><b>Cadastre a equipe primeiro</b>' +
+      '<p>Cada jornada pertence a um profissional.</p>' +
+      '<a class="btn btn-solid" href="barbeiros.html">Cadastrar equipe</a></div>';
+  } else {
+    conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+    iniciar(equipe);
+  }
+}
+
+function iniciar(equipe) {
+  const seletor = document.getElementById('barbeiro');
+  const lista   = document.getElementById('lista');
+  const aviso   = document.getElementById('aviso');
+  const botao   = document.getElementById('adicionar');
+
+  seletor.innerHTML = equipe.map(b =>
+    '<option value="' + b.id + '">' + escapar(b.nome) + '</option>').join('');
+
+  const mostrar = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
+  const hhmm = (t) => String(t).slice(0, 5);
+
+  async function carregar() {
+    const { data, error } = await sb
+      .from('jornadas')
+      .select('id, dia_semana, hora_inicio, hora_fim')
+      .eq('barbeiro_id', seletor.value)
+      .order('dia_semana').order('hora_inicio');
+
+    if (error) { lista.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>'; return; }
+
+    if (!data.length) {
+      lista.innerHTML = '<div class="vazio"><b>Sem jornada cadastrada</b>' +
+        '<p>Enquanto não houver horário de trabalho, esse profissional não aparece com vagas para o cliente.</p></div>';
+      return;
+    }
+
+    let html = '';
+    for (let d = 0; d <= 6; d++) {
+      const doDia = data.filter(j => j.dia_semana === d);
+      if (!doDia.length) continue;
+      html += '<h2 class="secao-titulo">' + NOMES[d] + '</h2>';
+      html += doDia.map(j =>
+        '<div class="item"><div class="principal"><b>' +
+        hhmm(j.hora_inicio) + ' às ' + hhmm(j.hora_fim) + '</b></div>' +
+        '<button class="btn btn-perigo" data-apagar="' + j.id + '">Remover</button></div>'
+      ).join('');
+    }
+    lista.innerHTML = html;
+  }
+
+  document.getElementById('novo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const dia    = document.getElementById('dia').value;
+    const inicio = document.getElementById('inicio').value;
+    const fim    = document.getElementById('fim').value;
+
+    if (!inicio || !fim) return mostrar('Preencha a entrada e a saída.');
+    if (fim <= inicio)   return mostrar('A saída precisa ser depois da entrada.');
+
+    const dias = dia === 'uteis' ? [1,2,3,4,5]
+               : dia === 'todos' ? [0,1,2,3,4,5,6]
+               : [Number(dia)];
+
+    botao.disabled = true;
+    const { error } = await sb.from('jornadas').insert(
+      dias.map(d => ({
+        barbeiro_id: seletor.value,
+        dia_semana: d,
+        hora_inicio: inicio,
+        hora_fim: fim
+      }))
+    );
+    botao.disabled = false;
+
+    if (error) return mostrar('Não foi possível salvar: ' + error.message);
+
+    mostrar('Horário adicionado.', 'ok');
+    carregar();
+  });
+
+  lista.addEventListener('click', async (e) => {
+    const apagar = e.target.closest('[data-apagar]');
+    if (!apagar) return;
+    apagar.disabled = true;
+    await sb.from('jornadas').delete().eq('id', apagar.dataset.apagar);
+    carregar();
+  });
+
+  seletor.addEventListener('change', carregar);
+  carregar();
+
+  // ----------------------------------------------------------
+  // Pausas e bloqueios
+  // ----------------------------------------------------------
+  const bTipo  = document.getElementById('b-tipo');
+  const bQuem  = document.getElementById('b-quem');
+  const bAviso = document.getElementById('b-aviso');
+  const listaB = document.getElementById('lista-bloqueios');
+
+  bQuem.innerHTML = '<option value="">Toda a equipe</option>' +
+    equipe.map(b => '<option value="' + b.id + '">' + escapar(b.nome) + '</option>').join('');
+
+  bTipo.addEventListener('change', () => {
+    const semanal = bTipo.value === 'semanal';
+    document.getElementById('b-semanal').style.display = semanal ? '' : 'none';
+    document.getElementById('b-pontual').style.display = semanal ? 'none' : '';
+  });
+
+  const avisoB = (t, tipo = 'erro') => { bAviso.textContent = t; bAviso.className = 'aviso ' + tipo; };
+
+  async function carregarBloqueios() {
+    const { data, error } = await sb
+      .from('bloqueios')
+      .select('id, motivo, dia_semana, hora_inicio, hora_fim, inicio, fim, barbeiro_id')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('dia_semana', { nullsFirst: false })
+      .order('inicio');
+
+    if (error) { listaB.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>'; return; }
+
+    if (!data.length) {
+      listaB.innerHTML = '<div class="vazio"><b>Nenhum bloqueio</b>' +
+        '<p>Sem pausas cadastradas, a agenda fica livre durante toda a jornada.</p></div>';
+      return;
+    }
+
+    const nomeDe = (id) => id ? (equipe.find(b => b.id === id)?.nome || 'Profissional') : 'Toda a equipe';
+
+    listaB.innerHTML = data.map(b => {
+      let quando;
+      if (b.dia_semana !== null && b.dia_semana !== undefined) {
+        quando = NOMES[b.dia_semana] + ' · ' + hhmm(b.hora_inicio) + ' às ' + hhmm(b.hora_fim) + ' · toda semana';
+      } else {
+        const i = new Date(b.inicio), f = new Date(b.fim);
+        quando = i.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) +
+                 ' até ' + f.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      }
+      return '<div class="item"><div class="principal">' +
+        '<b>' + escapar(b.motivo || 'Bloqueio') + '</b>' +
+        '<span>' + quando + ' · ' + escapar(nomeDe(b.barbeiro_id)) + '</span></div>' +
+        '<button class="btn btn-perigo" data-apagar-b="' + b.id + '">Remover</button></div>';
+    }).join('');
+  }
+
+  document.getElementById('novo-bloqueio').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const motivo = document.getElementById('b-motivo').value.trim() || null;
+    const quem = bQuem.value || null;
+    const base = { estabelecimento_id: barbearia.id, barbeiro_id: quem, motivo };
+    let linhas;
+
+    if (bTipo.value === 'semanal') {
+      const dia = document.getElementById('b-dia').value;
+      const ini = document.getElementById('b-inicio').value;
+      const fim = document.getElementById('b-fim').value;
+      if (!ini || !fim) return avisoB('Preencha o horário da pausa.');
+      if (fim <= ini) return avisoB('O fim precisa ser depois do início.');
+      const dias = dia === 'uteis' ? [1,2,3,4,5] : dia === 'todos' ? [0,1,2,3,4,5,6] : [Number(dia)];
+      linhas = dias.map(d => ({ ...base, dia_semana: d, hora_inicio: ini, hora_fim: fim }));
+    } else {
+      const ini = document.getElementById('b-data-ini').value;
+      const fim = document.getElementById('b-data-fim').value;
+      if (!ini || !fim) return avisoB('Preencha as duas datas.');
+      if (fim <= ini) return avisoB('A data final precisa ser depois da inicial.');
+      linhas = [{ ...base, inicio: new Date(ini).toISOString(), fim: new Date(fim).toISOString() }];
+    }
+
+    const botao = document.getElementById('b-adicionar');
+    botao.disabled = true;
+    const { error } = await sb.from('bloqueios').insert(linhas);
+    botao.disabled = false;
+
+    if (error) return avisoB('Não foi possível salvar: ' + error.message);
+    avisoB('Bloqueio adicionado.', 'ok');
+    carregarBloqueios();
+  });
+
+  listaB.addEventListener('click', async (e) => {
+    const apagar = e.target.closest('[data-apagar-b]');
+    if (!apagar) return;
+    apagar.disabled = true;
+    await sb.from('bloqueios').delete().eq('id', apagar.dataset.apagarB);
+    carregarBloqueios();
+  });
+
+  carregarBloqueios();
+}
+</script>
+
+</body>
+</html>

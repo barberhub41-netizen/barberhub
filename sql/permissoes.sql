@@ -205,3 +205,20 @@ with check (
 drop policy if exists agend_apagar on agendamentos;
 create policy agend_apagar on agendamentos for delete to authenticated
 using (public.e_admin());
+
+-- ------------------------------------------------------------
+-- bloqueios (almoço, pausa, folga, férias)
+-- Leitura pública: impede o cliente de ver o almoço como livre.
+-- ------------------------------------------------------------
+drop policy if exists bloqueios_ler on bloqueios;
+create policy bloqueios_ler on bloqueios for select to anon, authenticated
+using (
+  public.estab_disponivel(estabelecimento_id)
+  or public.gerencio_estab(estabelecimento_id)
+  or public.sou_barbeiro(barbeiro_id)
+);
+
+drop policy if exists bloqueios_gerir on bloqueios;
+create policy bloqueios_gerir on bloqueios for all to authenticated
+using (public.gerencio_estab(estabelecimento_id))
+with check (public.gerencio_estab(estabelecimento_id));
