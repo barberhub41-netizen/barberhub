@@ -74,6 +74,15 @@
             <input id="uf" type="text" placeholder="PR" maxlength="2" required />
           </div>
 
+          <div class="campo larga">
+            <label>Localização no mapa</label>
+            <div class="acoes" style="margin-top:0">
+              <button class="btn btn-outline" type="button" id="pegar-local">Usar minha posição atual</button>
+              <span id="local-atual" style="color:var(--muted);font-size:14px;align-self:center"></span>
+            </div>
+            <p class="dica">Estando na barbearia, toque no botão. É isso que faz você aparecer na busca "perto de mim".</p>
+          </div>
+
           <div class="campo">
             <label for="intervalo_min">Intervalo entre horários</label>
             <select id="intervalo_min">
@@ -109,7 +118,8 @@
 </main>
 
 <script type="module">
-import { sb, montarTopo, exigirLogin, apelido, escapar, montarPainel, minhasBarbearias } from './app.js';
+import { sb, montarTopo, exigirLogin, apelido, escapar, montarPainel, minhasBarbearias,
+         buscarCep, ondeEstou } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
@@ -121,6 +131,7 @@ const salvar = document.getElementById('salvar');
 const ver    = document.getElementById('ver');
 
 const campos = ['nome','apelido_unidade','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','intervalo_min','status'];
+let coordenadas = { latitude: null, longitude: null };
 const el = (id) => document.getElementById(id);
 
 let existente = null;
@@ -150,6 +161,8 @@ if (error) {
 } else if (data) {
   existente = data;
   campos.forEach((c) => { if (data[c] != null) el(c).value = data[c]; });
+  coordenadas = { latitude: data.latitude, longitude: data.longitude };
+  mostrarLocal();
   document.getElementById('titulo').textContent = data.nome;
   document.getElementById('legenda').textContent =
     data.status === 'disponivel'
@@ -164,6 +177,44 @@ if (error) {
 
 document.getElementById('nova-unidade').addEventListener('click', () => {
   location.href = 'estabelecimento.html?nova=1';
+});
+
+function mostrarLocal() {
+  const alvo = document.getElementById('local-atual');
+  alvo.textContent = coordenadas.latitude != null
+    ? 'Marcada: ' + Number(coordenadas.latitude).toFixed(5) + ', ' + Number(coordenadas.longitude).toFixed(5)
+    : 'Ainda não marcada.';
+}
+mostrarLocal();
+
+document.getElementById('pegar-local').addEventListener('click', async () => {
+  const botao = document.getElementById('pegar-local');
+  botao.disabled = true;
+  botao.textContent = 'Procurando...';
+
+  const onde = await ondeEstou();
+
+  botao.disabled = false;
+  botao.textContent = 'Usar minha posição atual';
+
+  if (!onde) {
+    mostrar('Não consegui a localização. Permita o acesso no navegador e tente de novo.');
+    return;
+  }
+
+  coordenadas = { latitude: onde.lat, longitude: onde.lon };
+  mostrarLocal();
+  mostrar('Posição capturada. Clique em Salvar para gravar.', 'ok');
+});
+
+// CEP preenche o endereço sozinho
+el('cep').addEventListener('blur', async () => {
+  const achado = await buscarCep(el('cep').value);
+  if (!achado) return;
+  if (!el('logradouro').value) el('logradouro').value = achado.logradouro;
+  if (!el('bairro').value)     el('bairro').value = achado.bairro;
+  if (!el('cidade').value)     el('cidade').value = achado.cidade;
+  if (!el('uf').value)         el('uf').value = achado.uf;
 });
 
 // ------------------------------------------------------------
@@ -184,6 +235,8 @@ form.addEventListener('submit', async (e) => {
 
   valores.uf = valores.uf.toUpperCase();
   valores.intervalo_min = Number(valores.intervalo_min) || 30;
+  valores.latitude = coordenadas.latitude;
+  valores.longitude = coordenadas.longitude;
 
   salvar.disabled = true;
   salvar.textContent = 'Salvando...';

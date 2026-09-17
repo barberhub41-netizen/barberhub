@@ -27,12 +27,20 @@
       <button class="btn btn-outline" id="limpar" type="button">Limpar</button>
     </div>
 
+    <div class="filtros">
+      <button class="filtro on" data-modo="todas" type="button">Todas</button>
+      <button class="filtro" data-modo="perto" type="button">Perto de mim</button>
+      <button class="filtro" data-modo="favoritas" type="button">Favoritas</button>
+      <button class="filtro" data-modo="nota" type="button">Melhor avaliadas</button>
+    </div>
+
     <div id="resultado"><p class="carregando">Carregando...</p></div>
   </div>
 </main>
 
 <script type="module">
-import { sb, montarTopo, escapar, urlImagem } from './app.js';
+import { sb, montarTopo, escapar, urlImagem, sessaoAtual,
+         ondeEstou, distanciaKm, mostrarDistancia } from './app.js';
 
 montarTopo('buscar');
 
@@ -51,6 +59,17 @@ if (cidadeUrl) {
 const TESOURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
 const SETA    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg>';
 
+let modo = 'todas';
+let minhaPosicao = null;
+let favoritas = new Set();
+
+const sessao = await sessaoAtual();
+if (sessao) {
+  const { data } = await sb.from('favoritos')
+    .select('estabelecimento_id').eq('cliente_id', sessao.user.id);
+  favoritas = new Set((data || []).map(f => f.estabelecimento_id));
+}
+
 function cartao(e) {
   const endereco = [e.logradouro, e.numero].filter(Boolean).join(', ');
   const local    = [e.bairro, e.cidade].filter(Boolean).join(' — ');
@@ -64,6 +83,7 @@ function cartao(e) {
       '<b>' + escapar(e.nome) + '</b>' +
       '<span>' + escapar(endereco || local) + '</span>' +
       (endereco && local ? '<span>' + escapar(local) + '</span>' : '') +
+      (e._km != null ? '<em class="distancia">' + mostrarDistancia(e._km) + '</em>' : '') +
     '</span>' +
     '<span class="next">' + SETA + '</span>' +
   '</a>';
@@ -74,7 +94,7 @@ async function buscar() {
 
   let consulta = sb
     .from('estabelecimentos')
-    .select('id, nome, slug, bairro, cidade, uf, logradouro, numero, logo_caminho, nota_media, nota_qtd')
+    .select('id, nome, slug, bairro, cidade, uf, logradouro, numero, logo_caminho, nota_media, nota_qtd, latitude, longitude')
     .eq('status', 'disponivel')
     .order('nome');
 
@@ -86,7 +106,7 @@ async function buscar() {
     );
   }
 
-  const { data, error } = await consulta;
+  let { data, error } = await consulta;
 
   if (error) {
     resultado.innerHTML = '<div class="vazio"><b>Não foi possível carregar</b>' +
@@ -94,11 +114,31 @@ async function buscar() {
     return;
   }
 
+  let lista = data;
+
+  // calcula a distância, quando dá
+  if (minhaPosicao) {
+    lista.forEach(e => {
+      e._km = distanciaKm(minhaPosicao.lat, minhaPosicao.lon, e.latitude, e.longitude);
+    });
+  }
+
+  if (modo === 'favoritas') lista = lista.filter(e => favoritas.has(e.id));
+  if (modo === 'perto')     lista = lista.filter(e => e._km != null)
+                                        .sort((a, b) => a._km - b._km);
+  if (modo === 'nota')      lista = lista.filter(e => e.nota_qtd > 0)
+                                        .sort((a, b) => b.nota_media - a.nota_media);
+
+  data = lista;
+
   if (!data.length) {
     resultado.innerHTML = '<div class="vazio">' +
       '<b>Nenhuma barbearia por aqui ainda</b>' +
-      '<p>' + (t
-        ? 'Nada encontrado para “' + escapar(t) + '”. Tente outro termo.'
+      '<p>' + (
+        modo === 'favoritas' ? 'Você ainda não favoritou nenhuma barbearia.'
+        : modo === 'perto' ? 'Nenhuma barbearia com localização cadastrada por perto.'
+        : modo === 'nota' ? 'Nenhuma barbearia avaliada ainda.'
+        : t ? 'Nada encontrado para “' + escapar(t) + '”. Tente outro termo.'
         : 'Assim que um estabelecimento concluir o cadastro e disponibilizar o perfil, ele aparece nesta lista.') +
       '</p>' +
       '<a class="btn btn-outline" href="para-estabelecimentos.html">Cadastrar minha barbearia</a>' +
@@ -111,6 +151,33 @@ async function buscar() {
     : data.length + ' barbearias encontradas.';
   resultado.innerHTML = '<div class="cards">' + data.map(cartao).join('') + '</div>';
 }
+
+document.querySelector('.filtros').addEventListener('click', async (e) => {
+  const botao = e.target.closest('[data-modo]');
+  if (!botao) return;
+
+  document.querySelectorAll('.filtro').forEach(f => f.classList.remove('on'));
+  botao.classList.add('on');
+  modo = botao.dataset.modo;
+
+  if (modo === 'perto' && !minhaPosicao) {
+    resultado.innerHTML = '<p class="carregando">Procurando sua localização...</p>';
+    minhaPosicao = await ondeEstou();
+    if (!minhaPosicao) {
+      resultado.innerHTML = '<div class="vazio"><b>Sem acesso à localização</b>' +
+        '<p>Permita o acesso no navegador para ver as barbearias mais próximas.</p></div>';
+      return;
+    }
+  }
+
+  if (modo === 'favoritas' && !sessao) {
+    resultado.innerHTML = '<div class="vazio"><b>Entre para ver suas favoritas</b>' +
+      '<a class="btn btn-solid" href="entrar.html">Entrar</a></div>';
+    return;
+  }
+
+  buscar();
+});
 
 document.getElementById('buscar').addEventListener('click', buscar);
 document.getElementById('limpar').addEventListener('click', () => {

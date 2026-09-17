@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recuperar senha — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="acesso">
+  <div class="caixa">
+    <h1>Recuperar senha</h1>
+    <p class="legenda">Informe o e-mail da sua conta. Enviamos um link para você criar uma senha nova.</p>
+
+    <form id="form" novalidate>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" autocomplete="email" placeholder="voce@email.com" required />
+      </div>
+      <button class="btn btn-solid" type="submit" id="botao">Enviar link</button>
+    </form>
+
+    <div class="aviso" id="aviso" role="status"></div>
+
+    <p class="rodape-caixa">Lembrou? <a href="entrar.html">Entrar</a></p>
+    <a class="voltar" href="index.html">← Voltar para o início</a>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo } from './app.js';
+import { traduzErro } from './config.js';
+
+montarTopo('');
+
+const form  = document.getElementById('form');
+const aviso = document.getElementById('aviso');
+const botao = document.getElementById('botao');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+
+  if (!email) {
+    aviso.textContent = 'Informe o e-mail.';
+    aviso.className = 'aviso erro';
+    return;
+  }
+
+  botao.disabled = true;
+  botao.textContent = 'Enviando...';
+
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: new URL('nova-senha.html', location.href).href
+  });
+
+  botao.disabled = false;
+  botao.textContent = 'Enviar link';
+
+  if (error) {
+    aviso.textContent = traduzErro(error.message);
+    aviso.className = 'aviso erro';
+    return;
+  }
+
+  // a mensagem é a mesma exista ou não a conta, para não revelar
+  // quem tem cadastro na plataforma
+  aviso.textContent = 'Se existir uma conta com esse e-mail, o link chega em instantes. Confira também a caixa de spam.';
+  aviso.className = 'aviso ok';
+  form.reset();
+});
+</script>
+
+</body>
+</html>

@@ -51,8 +51,8 @@ export async function montarTopo(atual = '') {
     const perfil = await meuPerfil(sessao);
     const nome = (perfil?.nome || sessao.user.email).split(' ')[0];
     direita =
-      '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Meus agendamentos</a>' +
-      '<button class="btn btn-solid btn-sm" id="sair">Sair, ' + escapar(nome) + '</button>';
+      '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>' +
+      '<a class="btn btn-solid btn-sm" href="perfil.html">' + escapar(nome) + '</a>';
   } else {
     direita =
       '<a class="btn btn-outline btn-sm" href="entrar.html">Entrar</a>' +
@@ -70,13 +70,6 @@ export async function montarTopo(atual = '') {
       '<div class="top-cta">' + direita + '</div>' +
     '</div>';
 
-  const sair = document.getElementById('sair');
-  if (sair) {
-    sair.addEventListener('click', async () => {
-      await sb.auth.signOut();
-      location.href = 'index.html';
-    });
-  }
 }
 
 // ------------------------------------------------------------
@@ -368,4 +361,65 @@ export function aplicarPlano(servicos, assinatura) {
       motivo: pct ? 'cota usada · ' + pct + '% de desconto' : 'cota do ciclo já usada'
     };
   });
+}
+
+// ============================================================
+// Foto de perfil, favoritos, CEP e distância
+// ============================================================
+export const BUCKET_PERFIS = 'perfis';
+
+export function urlAvatar(caminho) {
+  if (!caminho) return null;
+  return sb.storage.from(BUCKET_PERFIS).getPublicUrl(caminho).data.publicUrl;
+}
+
+// Distância em linha reta, em km. Suficiente para ordenar a busca.
+export function distanciaKm(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some(v => v == null)) return null;
+  const R = 6371;
+  const rad = (g) => (g * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1);
+  const dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function mostrarDistancia(km) {
+  if (km == null) return '';
+  return km < 1
+    ? Math.round(km * 1000) + ' m'
+    : km.toFixed(km < 10 ? 1 : 0).replace('.', ',') + ' km';
+}
+
+// Pede a posição ao navegador. Nunca rejeita: devolve null se
+// a pessoa recusar ou o aparelho não souber.
+export function ondeEstou(timeout = 8000) {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      () => resolve(null),
+      { timeout, maximumAge: 300000 }
+    );
+  });
+}
+
+// Busca o endereço pelo CEP no ViaCEP. Devolve null se não achar.
+export async function buscarCep(cep) {
+  const limpo = String(cep).replace(/\D/g, '');
+  if (limpo.length !== 8) return null;
+  try {
+    const r = await fetch('https://viacep.com.br/ws/' + limpo + '/json/');
+    const d = await r.json();
+    if (d.erro) return null;
+    return {
+      logradouro: d.logradouro || '',
+      bairro: d.bairro || '',
+      cidade: d.localidade || '',
+      uf: d.uf || ''
+    };
+  } catch (e) {
+    return null;
+  }
 }

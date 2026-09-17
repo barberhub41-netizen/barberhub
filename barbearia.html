@@ -20,7 +20,8 @@
 </main>
 
 <script type="module">
-import { sb, montarTopo, moeda, duracao, escapar, urlImagem, estrelas, sessaoAtual, PERIODOS } from './app.js';
+import { sb, montarTopo, moeda, duracao, escapar, urlImagem, estrelas, sessaoAtual, PERIODOS,
+         mostrarDistancia, distanciaKm, ondeEstou } from './app.js';
 
 montarTopo('buscar');
 
@@ -84,7 +85,7 @@ if (!slug) {
 } else {
   const { data: b, error } = await sb
     .from('estabelecimentos')
-    .select('id, nome, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf, logo_caminho, matriz_id, nota_media, nota_qtd')
+    .select('id, nome, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf, logo_caminho, matriz_id, nota_media, nota_qtd, latitude, longitude')
     .eq('slug', slug)
     .maybeSingle();
 
@@ -168,9 +169,14 @@ async function montarPerfil(b) {
         ' <small>(' + b.nota_qtd + ')</small></span>' : '') + '</h1>' +
       '<p class="perfil-endereco">' + escapar(endereco) + '</p>' +
       (b.telefone ? '<p class="perfil-endereco">' + escapar(b.telefone) + '</p>' : '') + '</div>' +
+      '<div style="display:flex;gap:10px;align-items:center">' +
+      (sessao ? '<button class="coracao" id="favoritar" aria-label="Favoritar">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"/></svg></button>' : '') +
       (podeAgendar
         ? '<a class="btn btn-solid" href="agendar.html?slug=' + encodeURIComponent(slug) + '">Agendar horário</a>'
         : '') +
+      '</div>' +
     '</div>' +
     (b.descricao ? '<p class="perfil-descricao">' + escapar(b.descricao) + '</p>' : '') +
     ((fotos.data || []).length

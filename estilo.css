@@ -444,3 +444,17 @@ input[type=file]::file-selector-button{background:var(--orange);color:#161513;bo
 .linha-preco small{display:block;color:var(--muted);font-size:12px;font-weight:400}
 .linha-preco span:last-child{text-align:right;white-space:nowrap}
 .linha-preco.economia{border-top:1px solid rgba(216,107,63,.3);margin-top:8px;padding-top:10px;color:var(--orange-2);font-weight:700}
+
+/* ============================================================
+   Favoritos, distância e perfil
+   ============================================================ */
+.coracao{background:none;border:1px solid var(--line-2);border-radius:50%;width:44px;height:44px;display:grid;place-items:center;cursor:pointer;color:var(--muted);transition:.16s;flex-shrink:0}
+.coracao:hover{border-color:var(--orange);color:var(--orange)}
+.coracao.marcado{background:var(--orange-soft);border-color:var(--orange);color:var(--orange)}
+.coracao svg{width:20px;height:20px}
+.coracao.marcado svg{fill:currentColor}
+.distancia{display:inline-flex;align-items:center;gap:5px;color:var(--orange-2);font-size:12.5px;font-weight:600}
+.filtros{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:6px}
+.filtro{border:1px solid var(--line);border-radius:999px;padding:9px 17px;font-size:13.5px;color:var(--muted);cursor:pointer;background:none;font-family:var(--font);transition:.16s}
+.filtro:hover{border-color:var(--line-2);color:var(--text)}
+.filtro.on{background:var(--orange);border-color:var(--orange);color:#161513;font-weight:600}

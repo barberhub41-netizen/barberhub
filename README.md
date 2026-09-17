@@ -24,6 +24,9 @@ agenda.html                agenda do dia em calendário, com encaixe
 servicos.html              cadastro de serviços do estabelecimento
 barbeiros.html             cadastro da equipe
 entrar.html                login por e-mail/senha e Google
+recuperar.html             pedido do link de nova senha
+nova-senha.html            definição da nova senha
+perfil.html                perfil do cliente e favoritas
 cadastro.html              criação de conta de cliente
 meus-agendamentos.html     agendamentos do cliente, com cancelamento
 estabelecimento.html       cadastro e edição da barbearia
@@ -40,6 +43,7 @@ sql/migracao-04-imagens.sql    bucket, logo e fotos (rodar uma vez)
 sql/migracao-05-filiais-servicos-avaliacoes.sql  filiais, vários serviços,
                                avaliações, planos e fidelidade (rodar uma vez)
 sql/migracao-06-planos-configuraveis.sql  cota por serviço e descontos
+sql/migracao-07-perfil-favoritos.sql  perfil do cliente, foto, favoritos
 ```
 
 ---
@@ -101,6 +105,7 @@ Todos podem ser executados mais de uma vez sem duplicar nada.
 | `assinaturas` | quem assinou qual plano |
 | `plano_itens` | o que cada plano cobre, serviço a serviço |
 | `fidelidade` | regra do cartão de pontos |
+| `favoritos` | barbearias guardadas pelo cliente |
 
 Decisões que valem lembrar:
 

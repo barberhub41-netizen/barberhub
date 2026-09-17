@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Meu perfil — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Meu perfil</h1>
+    <p class="legenda">Os dados que a barbearia vê quando você marca um horário.</p>
+
+    <div class="painel" style="max-width:640px;margin-top:28px">
+      <div class="enviar">
+        <span class="previa" id="previa">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+        </span>
+        <div style="flex:1;min-width:220px">
+          <input type="file" id="arquivo" accept="image/jpeg,image/png,image/webp" />
+          <p class="dica" style="color:var(--dim);font-size:12.5px;margin-top:8px">Até 2 MB. Opcional.</p>
+          <div class="barra-progresso" id="progresso"><i></i></div>
+        </div>
+        <button class="btn btn-perigo" id="remover" style="display:none">Remover</button>
+      </div>
+
+      <form id="form" style="margin-top:8px">
+        <div class="form-grid">
+          <div class="campo larga">
+            <label for="nome">Nome</label>
+            <input id="nome" type="text" autocomplete="name" placeholder="Como quer ser chamado" required />
+          </div>
+          <div class="campo">
+            <label for="telefone">Telefone</label>
+            <input id="telefone" type="tel" autocomplete="tel" placeholder="(41) 90000-0000" />
+            <p class="dica">É por aqui que a barbearia te avisa se algo mudar.</p>
+          </div>
+          <div class="campo">
+            <label for="nascimento">Data de nascimento</label>
+            <input id="nascimento" type="date" />
+            <p class="dica">Opcional. Algumas barbearias dão brinde de aniversário.</p>
+          </div>
+          <div class="campo larga">
+            <label for="email">E-mail</label>
+            <input id="email" type="email" disabled />
+            <p class="dica">Para trocar o e-mail, fale com o suporte.</p>
+          </div>
+        </div>
+
+        <div class="aviso" id="aviso" role="status"></div>
+        <div class="acoes">
+          <button class="btn btn-solid" type="submit" id="salvar">Salvar</button>
+          <a class="btn btn-outline" href="meus-agendamentos.html">Meus agendamentos</a>
+        </div>
+      </form>
+    </div>
+
+    <h2 class="secao-titulo" style="margin-top:48px">Barbearias favoritas</h2>
+    <div id="favoritas"><p class="carregando">Carregando...</p></div>
+
+    <div class="acoes" style="margin-top:48px">
+      <button class="btn btn-outline" id="sair-conta">Sair da conta</button>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, escapar,
+         BUCKET_PERFIS, urlAvatar, urlImagem, conferirImagem, extensaoDe } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('');
+
+const el = (id) => document.getElementById(id);
+const dizer = (t, tipo = 'erro') => { el('aviso').textContent = t; el('aviso').className = 'aviso ' + tipo; };
+
+const PESSOA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>';
+const TESOURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
+
+let fotoAtual = null;
+
+// ------------------------------------------------------------
+// Dados
+// ------------------------------------------------------------
+const { data: perfil, error } = await sb.from('perfis')
+  .select('nome, telefone, data_nascimento, foto_caminho')
+  .eq('id', sessao.user.id).maybeSingle();
+
+if (error) {
+  dizer('Não foi possível carregar: ' + error.message);
+} else if (perfil) {
+  el('nome').value = perfil.nome || '';
+  el('telefone').value = perfil.telefone || '';
+  el('nascimento').value = perfil.data_nascimento || '';
+  fotoAtual = perfil.foto_caminho;
+  desenharFoto();
+}
+el('email').value = sessao.user.email || '';
+
+function desenharFoto() {
+  if (fotoAtual) {
+    el('previa').innerHTML = '<img src="' + urlAvatar(fotoAtual) + '" alt="Sua foto" />';
+    el('remover').style.display = '';
+  } else {
+    el('previa').innerHTML = PESSOA;
+    el('remover').style.display = 'none';
+  }
+}
+
+el('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nome = el('nome').value.trim();
+  if (!nome) return dizer('Informe seu nome.');
+
+  el('salvar').disabled = true;
+  const { error } = await sb.from('perfis').update({
+    nome,
+    telefone: el('telefone').value.trim() || null,
+    data_nascimento: el('nascimento').value || null
+  }).eq('id', sessao.user.id);
+  el('salvar').disabled = false;
+
+  if (error) return dizer('Não foi possível salvar: ' + error.message);
+  dizer('Perfil atualizado.', 'ok');
+  montarTopo('');
+});
+
+// ------------------------------------------------------------
+// Foto
+// ------------------------------------------------------------
+el('arquivo').addEventListener('change', async () => {
+  const arquivo = el('arquivo').files[0];
+  const problema = conferirImagem(arquivo, 2);
+  if (problema) return dizer(problema);
+
+  el('progresso').classList.add('ativa');
+  const caminho = sessao.user.id + '/foto-' + Date.now() + '.' + extensaoDe(arquivo);
+  const envio = await sb.storage.from(BUCKET_PERFIS).upload(caminho, arquivo, { upsert: true });
+
+  if (envio.error) {
+    el('progresso').classList.remove('ativa');
+    return dizer('Não foi possível enviar: ' + envio.error.message);
+  }
+
+  const { error } = await sb.from('perfis')
+    .update({ foto_caminho: caminho }).eq('id', sessao.user.id);
+
+  el('progresso').classList.remove('ativa');
+  if (error) return dizer('Enviou a imagem, mas não salvou no perfil: ' + error.message);
+
+  if (fotoAtual && fotoAtual !== caminho) {
+    await sb.storage.from(BUCKET_PERFIS).remove([fotoAtual]);
+  }
+  fotoAtual = caminho;
+  el('arquivo').value = '';
+  desenharFoto();
+  dizer('Foto atualizada.', 'ok');
+});
+
+el('remover').addEventListener('click', async () => {
+  if (!confirm('Remover sua foto?')) return;
+  await sb.from('perfis').update({ foto_caminho: null }).eq('id', sessao.user.id);
+  if (fotoAtual) await sb.storage.from(BUCKET_PERFIS).remove([fotoAtual]);
+  fotoAtual = null;
+  desenharFoto();
+  dizer('Foto removida.', 'ok');
+});
+
+// ------------------------------------------------------------
+// Favoritas
+// ------------------------------------------------------------
+async function carregarFavoritas() {
+  const { data, error } = await sb.from('favoritos')
+    .select('estabelecimento_id, estabelecimentos(nome, slug, bairro, cidade, logo_caminho, nota_media, nota_qtd)')
+    .eq('cliente_id', sessao.user.id)
+    .order('criado_em', { ascending: false });
+
+  const alvo = document.getElementById('favoritas');
+
+  if (error) { alvo.innerHTML = '<p class="legenda">Erro: ' + escapar(error.message) + '</p>'; return; }
+
+  if (!data.length) {
+    alvo.innerHTML = '<div class="vazio"><b>Nenhuma favorita ainda</b>' +
+      '<p>Toque no coração no perfil de uma barbearia para guardá-la aqui.</p>' +
+      '<a class="btn btn-solid" href="buscar.html">Encontrar barbearias</a></div>';
+    return;
+  }
+
+  alvo.innerHTML = '<div class="cards">' + data.map(f => {
+    const e = f.estabelecimentos;
+    if (!e) return '';
+    return '<a class="card" href="barbearia.html?slug=' + encodeURIComponent(e.slug) + '">' +
+      '<span class="avatar">' + (e.logo_caminho
+        ? '<img src="' + urlImagem(e.logo_caminho) + '" alt="" loading="lazy" />' : TESOURA) +
+      (e.nota_qtd ? '<span class="badge">★ ' + Number(e.nota_media).toFixed(1).replace('.', ',') + '</span>' : '') +
+      '</span>' +
+      '<span class="card-txt"><b>' + escapar(e.nome) + '</b>' +
+      '<span>' + escapar([e.bairro, e.cidade].filter(Boolean).join(' — ')) + '</span></span>' +
+      '<span class="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></a>';
+  }).join('') + '</div>';
+}
+
+document.getElementById('sair-conta').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.href = 'index.html';
+});
+
+carregarFavoritas();
+</script>
+
+</body>
+</html>
