@@ -279,20 +279,18 @@
 <a class="helper" href="#duvidas" aria-label="Ir para as perguntas frequentes"><svg><use href="#i-help"/></svg></a>
 
 <script type="module">
-  import { sb } from './config.js';
-
+  import { montarTopo } from './app.js';
+  // o topo do início tem menu próprio; aqui só trocamos a área do usuário
   const area = document.getElementById('area-usuario');
-  const { data: { session } } = await sb.auth.getSession();
-
-  if (session) {
-    const { data: perfil } = await sb
-      .from('perfis').select('nome').eq('id', session.user.id).maybeSingle();
-    const nome = (perfil?.nome || session.user.email).split(' ')[0];
+  const { sessaoAtual, meuPerfil, sb } = await import('./app.js');
+  const sessao = await sessaoAtual();
+  if (sessao) {
+    const perfil = await meuPerfil(sessao);
+    const nome = (perfil?.nome || sessao.user.email).split(' ')[0];
     area.innerHTML =
       '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Meus agendamentos</a>' +
-      '<a class="btn btn-solid btn-sm" href="#" id="sair">Sair, ' + nome + '</a>';
-    document.getElementById('sair').addEventListener('click', async (e) => {
-      e.preventDefault();
+      '<button class="btn btn-solid btn-sm" id="sair">Sair, ' + nome + '</button>';
+    document.getElementById('sair').addEventListener('click', async () => {
       await sb.auth.signOut();
       location.reload();
     });

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Meus agendamentos — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Meus agendamentos</h1>
+    <p class="legenda" id="legenda">Seus horários marcados e o histórico de atendimentos.</p>
+    <div id="lista"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, quando, moeda, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('');
+
+const lista = document.getElementById('lista');
+
+function cartao(a, futuro) {
+  const servico = a.servicos?.nome || 'Serviço';
+  const barbeiro = a.barbeiros?.nome || '';
+  const local = a.estabelecimentos?.nome || '';
+  const podeCancelar = futuro && ['pendente', 'confirmado'].includes(a.status);
+
+  return '<article class="agend">' +
+    '<div class="quando"><b>' + quando(a.inicio) + '</b>' +
+      '<span>' + escapar(local) + '</span></div>' +
+    '<div class="oque"><b>' + escapar(servico) + '</b>' +
+      '<span>' + (barbeiro ? 'com ' + escapar(barbeiro) : '') +
+      (a.servicos ? ' · ' + moeda(a.servicos.preco_centavos) : '') + '</span></div>' +
+    '<span class="selo ' + a.status + '">' + a.status + '</span>' +
+    (podeCancelar
+      ? '<button class="btn btn-outline" data-cancelar="' + a.id + '">Cancelar</button>'
+      : '') +
+  '</article>';
+}
+
+async function carregar() {
+  lista.innerHTML = '<p class="carregando">Carregando...</p>';
+
+  const { data, error } = await sb
+    .from('agendamentos')
+    .select('id, inicio, fim, status, servicos(nome, preco_centavos), barbeiros(nome), estabelecimentos(nome, cidade)')
+    .eq('cliente_id', sessao.user.id)
+    .order('inicio', { ascending: false });
+
+  if (error) {
+    lista.innerHTML = '<div class="vazio"><b>Não foi possível carregar</b><p>' +
+      escapar(error.message) + '</p></div>';
+    return;
+  }
+
+  if (!data.length) {
+    lista.innerHTML = '<div class="vazio">' +
+      '<b>Você ainda não marcou nada</b>' +
+      '<p>Quando agendar um horário, ele aparece aqui — com a opção de remarcar ou cancelar.</p>' +
+      '<a class="btn btn-solid" href="buscar.html">Encontrar uma barbearia</a>' +
+      '</div>';
+    return;
+  }
+
+  const agora = new Date();
+  const futuros = data.filter(a => new Date(a.inicio) >= agora).reverse();
+  const passados = data.filter(a => new Date(a.inicio) < agora);
+
+  let html = '';
+  if (futuros.length) {
+    html += '<h2 class="secao-titulo">Próximos</h2>' + futuros.map(a => cartao(a, true)).join('');
+  }
+  if (passados.length) {
+    html += '<h2 class="secao-titulo">Histórico</h2>' + passados.map(a => cartao(a, false)).join('');
+  }
+  lista.innerHTML = html;
+}
+
+lista.addEventListener('click', async (e) => {
+  const botao = e.target.closest('[data-cancelar]');
+  if (!botao) return;
+
+  if (!confirm('Cancelar esse agendamento? A barbearia será avisada.')) return;
+
+  botao.disabled = true;
+  botao.textContent = 'Cancelando...';
+
+  const { error } = await sb
+    .from('agendamentos')
+    .update({ status: 'cancelado' })
+    .eq('id', botao.dataset.cancelar);
+
+  if (error) {
+    alert('Não foi possível cancelar: ' + error.message);
+    botao.disabled = false;
+    botao.textContent = 'Cancelar';
+    return;
+  }
+  carregar();
+});
+
+carregar();
+</script>
+
+</body>
+</html>

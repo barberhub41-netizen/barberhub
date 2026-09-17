@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buscar barbearias — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Barbearias</h1>
+    <p class="legenda" id="legenda">Escolha onde quer cortar.</p>
+
+    <div class="barra">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input id="termo" type="search" placeholder="Nome, bairro ou cidade" aria-label="Buscar" />
+      </div>
+      <button class="btn btn-solid" id="buscar" type="button">Buscar</button>
+      <button class="btn btn-outline" id="limpar" type="button">Limpar</button>
+    </div>
+
+    <div id="resultado"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo, escapar } from './app.js';
+
+montarTopo('buscar');
+
+const resultado = document.getElementById('resultado');
+const termo     = document.getElementById('termo');
+const legenda   = document.getElementById('legenda');
+
+// Aceita buscar.html?cidade=Curitiba, que é como o início manda
+const params = new URLSearchParams(location.search);
+const cidadeUrl = params.get('cidade') || '';
+if (cidadeUrl) {
+  termo.value = cidadeUrl;
+  legenda.textContent = 'Barbearias em ' + cidadeUrl + '.';
+}
+
+const TESOURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
+const SETA    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg>';
+
+function cartao(e) {
+  const endereco = [e.logradouro, e.numero].filter(Boolean).join(', ');
+  const local    = [e.bairro, e.cidade].filter(Boolean).join(' — ');
+  return '<a class="card" href="barbearia.html?slug=' + encodeURIComponent(e.slug) + '">' +
+    '<span class="avatar">' + TESOURA + '</span>' +
+    '<span class="card-txt">' +
+      '<b>' + escapar(e.nome) + '</b>' +
+      '<span>' + escapar(endereco || local) + '</span>' +
+      (endereco && local ? '<span>' + escapar(local) + '</span>' : '') +
+    '</span>' +
+    '<span class="next">' + SETA + '</span>' +
+  '</a>';
+}
+
+async function buscar() {
+  resultado.innerHTML = '<p class="carregando">Carregando...</p>';
+
+  let consulta = sb
+    .from('estabelecimentos')
+    .select('id, nome, slug, bairro, cidade, uf, logradouro, numero')
+    .eq('status', 'disponivel')
+    .order('nome');
+
+  const t = termo.value.trim();
+  if (t) {
+    // procura o texto no nome, no bairro ou na cidade
+    consulta = consulta.or(
+      'nome.ilike.%' + t + '%,bairro.ilike.%' + t + '%,cidade.ilike.%' + t + '%'
+    );
+  }
+
+  const { data, error } = await consulta;
+
+  if (error) {
+    resultado.innerHTML = '<div class="vazio"><b>Não foi possível carregar</b>' +
+      '<p>' + escapar(error.message) + '</p></div>';
+    return;
+  }
+
+  if (!data.length) {
+    resultado.innerHTML = '<div class="vazio">' +
+      '<b>Nenhuma barbearia por aqui ainda</b>' +
+      '<p>' + (t
+        ? 'Nada encontrado para “' + escapar(t) + '”. Tente outro termo.'
+        : 'Assim que um estabelecimento concluir o cadastro e disponibilizar o perfil, ele aparece nesta lista.') +
+      '</p>' +
+      '<a class="btn btn-outline" href="estabelecimento.html">Cadastrar minha barbearia</a>' +
+      '</div>';
+    return;
+  }
+
+  legenda.textContent = data.length === 1
+    ? '1 barbearia encontrada.'
+    : data.length + ' barbearias encontradas.';
+  resultado.innerHTML = '<div class="cards">' + data.map(cartao).join('') + '</div>';
+}
+
+document.getElementById('buscar').addEventListener('click', buscar);
+document.getElementById('limpar').addEventListener('click', () => {
+  termo.value = '';
+  history.replaceState(null, '', 'buscar.html');
+  buscar();
+});
+termo.addEventListener('keydown', (e) => { if (e.key === 'Enter') buscar(); });
+
+buscar();
+</script>
+
+</body>
+</html>

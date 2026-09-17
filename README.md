@@ -9,18 +9,20 @@ Site estático (HTML, CSS e JavaScript) com banco de dados e autenticação no S
 ## Estrutura
 
 ```
-index.html                 página do cliente (início)
+index.html                 início — página do cliente
+buscar.html                lista as barbearias disponíveis no catálogo
+barbearia.html             perfil de uma barbearia  (ainda não existe)
 entrar.html                login por e-mail/senha e Google
 cadastro.html              criação de conta de cliente
-estilo.css                 estilo compartilhado por todas as páginas
+meus-agendamentos.html     agendamentos do cliente, com cancelamento
+estabelecimento.html       cadastro e edição da barbearia
+app.js                     funções compartilhadas (sessão, topo, formatação)
 config.js                  conexão com o Supabase
+estilo.css                 estilo compartilhado por todas as páginas
 sql/schema.sql             tabelas, índices e gatilhos
 sql/permissoes.sql         políticas de RLS (quem vê e edita o quê)
 sql/conferencia.sql        consulta que confere se o banco está completo
 ```
-
-As páginas `buscar.html`, `estabelecimento.html` e `meus-agendamentos.html`
-ainda não existem — há links apontando para elas.
 
 ---
 
@@ -40,12 +42,9 @@ Depois acesse `http://localhost:3000`.
 
 ## Publicação pelo GitHub Pages
 
-1. Settings → Pages
-2. Source: **Deploy from a branch**
-3. Branch: `main` / pasta `/ (root)` → Save
-4. Em um ou dois minutos o site fica em `https://SEU-USUARIO.github.io/barberhub/`
+Settings → Pages → Source: **Deploy from a branch** → Branch `main`, pasta `/ (root)`.
 
-Depois de publicar, cadastre esse endereço no Supabase em
+O endereço publicado precisa estar cadastrado no Supabase em
 **Authentication → URL Configuration**, tanto em *Site URL* quanto em
 *Redirect URLs* (com `/**` no final).
 
@@ -80,6 +79,8 @@ Decisões que valem lembrar:
 - **O banco recusa horário duplo**: a restrição `agendamentos_sem_conflito`
   impede dois atendimentos sobrepostos no mesmo barbeiro.
 - **Agendamento não se apaga**, cancela — o status vira `cancelado`.
+- **Catálogo aberto**: quem não está logado vê os estabelecimentos com status
+  `disponivel`. Em `rascunho`, só o dono enxerga.
 
 ---
 
@@ -97,12 +98,12 @@ site. Ela ignora o RLS e dá acesso total ao banco.
 ## Roadmap
 
 - [x] 1. Banco de dados real
-- [ ] 2. Login e perfis de acesso *(banco pronto; faltam telas e testes)*
-- [ ] 3. Cadastro do estabelecimento
+- [x] 2. Login e perfis de acesso
+- [x] 3. Cadastro do estabelecimento *(dados básicos; faltam redes sociais e pagamento)*
 - [ ] 4. Upload de logo e fotos
 - [ ] 5. Perfil individual da barbearia
-- [ ] 6. Disponibilização no catálogo
-- [ ] 7. Busca real
+- [x] 6. Disponibilização no catálogo *(rascunho / disponível)*
+- [x] 7. Busca real *(falta filtro por serviço e distância)*
 - [ ] 8. Agenda
 - [ ] 9. Agendamento do cliente
 - [ ] 10. Painel do estabelecimento

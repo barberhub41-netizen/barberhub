@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Minha barbearia — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1 id="titulo">Minha barbearia</h1>
+    <p class="legenda" id="legenda">Os dados abaixo formam o perfil que o cliente vê.</p>
+
+    <div class="painel" style="margin-top:28px">
+      <form id="form" novalidate>
+        <div class="form-grid">
+          <div class="campo larga">
+            <label for="nome">Nome do estabelecimento *</label>
+            <input id="nome" type="text" placeholder="Barbearia do Zé" required />
+          </div>
+
+          <div class="campo larga">
+            <label for="descricao">Descrição</label>
+            <textarea id="descricao" placeholder="Conte em poucas linhas o que a sua barbearia tem de diferente."></textarea>
+          </div>
+
+          <div class="campo">
+            <label for="telefone">Telefone</label>
+            <input id="telefone" type="tel" placeholder="(41) 3000-0000" />
+          </div>
+
+          <div class="campo">
+            <label for="cep">CEP</label>
+            <input id="cep" type="text" placeholder="80000-000" inputmode="numeric" />
+          </div>
+
+          <div class="campo">
+            <label for="logradouro">Rua</label>
+            <input id="logradouro" type="text" placeholder="Rua das Palmeiras" />
+          </div>
+
+          <div class="campo">
+            <label for="numero">Número</label>
+            <input id="numero" type="text" placeholder="120" />
+          </div>
+
+          <div class="campo">
+            <label for="bairro">Bairro</label>
+            <input id="bairro" type="text" placeholder="Centro" />
+          </div>
+
+          <div class="campo">
+            <label for="cidade">Cidade *</label>
+            <input id="cidade" type="text" placeholder="Curitiba" required />
+          </div>
+
+          <div class="campo">
+            <label for="uf">Estado *</label>
+            <input id="uf" type="text" placeholder="PR" maxlength="2" required />
+          </div>
+
+          <div class="campo">
+            <label for="status">Situação</label>
+            <select id="status">
+              <option value="rascunho">Rascunho — só você vê</option>
+              <option value="disponivel">Disponível — aparece na busca</option>
+            </select>
+            <p class="dica">Deixe em rascunho até terminar de preencher tudo.</p>
+          </div>
+        </div>
+
+        <div class="aviso" id="aviso" role="status"></div>
+
+        <div class="acoes">
+          <button class="btn btn-solid" type="submit" id="salvar">Salvar</button>
+          <a class="btn btn-outline" id="ver" href="#" style="display:none">Ver na busca</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, apelido, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+
+const form   = document.getElementById('form');
+const aviso  = document.getElementById('aviso');
+const salvar = document.getElementById('salvar');
+const ver    = document.getElementById('ver');
+
+const campos = ['nome','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','status'];
+const el = (id) => document.getElementById(id);
+
+let existente = null;
+
+function mostrar(texto, tipo = 'erro') {
+  aviso.textContent = texto;
+  aviso.className = 'aviso ' + tipo;
+}
+
+// ------------------------------------------------------------
+// Carrega o estabelecimento do usuário, se já houver
+// ------------------------------------------------------------
+const { data, error } = await sb
+  .from('estabelecimentos')
+  .select('*')
+  .eq('dono_id', sessao.user.id)
+  .maybeSingle();
+
+if (error) {
+  mostrar('Não foi possível carregar: ' + error.message);
+} else if (data) {
+  existente = data;
+  campos.forEach((c) => { if (data[c] != null) el(c).value = data[c]; });
+  document.getElementById('titulo').textContent = data.nome;
+  document.getElementById('legenda').textContent =
+    data.status === 'disponivel'
+      ? 'Seu perfil está no catálogo e pode ser encontrado na busca.'
+      : 'Seu perfil está em rascunho. Só você consegue vê-lo.';
+  if (data.status === 'disponivel') {
+    ver.href = 'buscar.html?cidade=' + encodeURIComponent(data.cidade || '');
+    ver.style.display = '';
+  }
+}
+
+// ------------------------------------------------------------
+// Salvar
+// ------------------------------------------------------------
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const valores = {};
+  campos.forEach((c) => {
+    const v = el(c).value.trim();
+    valores[c] = v === '' ? null : v;
+  });
+
+  if (!valores.nome)   return mostrar('Informe o nome do estabelecimento.');
+  if (!valores.cidade) return mostrar('Informe a cidade.');
+  if (!valores.uf || valores.uf.length !== 2) return mostrar('O estado deve ter duas letras, como PR.');
+
+  valores.uf = valores.uf.toUpperCase();
+
+  salvar.disabled = true;
+  salvar.textContent = 'Salvando...';
+
+  let resposta;
+  if (existente) {
+    resposta = await sb
+      .from('estabelecimentos')
+      .update(valores)
+      .eq('id', existente.id)
+      .select()
+      .single();
+  } else {
+    // o slug entra na URL do perfil; o sufixo evita nomes repetidos
+    valores.slug = apelido(valores.nome) + '-' + Math.random().toString(36).slice(2, 7);
+    valores.dono_id = sessao.user.id;
+    resposta = await sb
+      .from('estabelecimentos')
+      .insert(valores)
+      .select()
+      .single();
+  }
+
+  salvar.disabled = false;
+  salvar.textContent = 'Salvar';
+
+  if (resposta.error) {
+    mostrar('Não foi possível salvar: ' + resposta.error.message);
+    return;
+  }
+
+  existente = resposta.data;
+  mostrar(
+    existente.status === 'disponivel'
+      ? 'Salvo. Sua barbearia já aparece na busca.'
+      : 'Salvo como rascunho. Mude a situação para “Disponível” quando quiser aparecer na busca.',
+    'ok'
+  );
+
+  if (existente.status === 'disponivel') {
+    ver.href = 'buscar.html?cidade=' + encodeURIComponent(existente.cidade || '');
+    ver.style.display = '';
+  } else {
+    ver.style.display = 'none';
+  }
+});
+</script>
+
+</body>
+</html>
