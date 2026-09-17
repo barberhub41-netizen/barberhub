@@ -208,17 +208,32 @@ using (public.e_admin());
 
 -- ------------------------------------------------------------
 -- bloqueios (almoço, pausa, folga, férias)
--- Leitura pública: impede o cliente de ver o almoço como livre.
+-- A tabela nasce na migração 03. Este trecho só roda se ela já
+-- existir, para que este arquivo possa ser executado antes ou
+-- depois da migração, em qualquer ordem.
 -- ------------------------------------------------------------
-drop policy if exists bloqueios_ler on bloqueios;
-create policy bloqueios_ler on bloqueios for select to anon, authenticated
-using (
-  public.estab_disponivel(estabelecimento_id)
-  or public.gerencio_estab(estabelecimento_id)
-  or public.sou_barbeiro(barbeiro_id)
-);
+do $$ begin
+  if to_regclass('public.bloqueios') is null then
+    raise notice 'Tabela bloqueios ainda nao existe — rode a migracao 03 depois deste arquivo.';
+    return;
+  end if;
 
-drop policy if exists bloqueios_gerir on bloqueios;
-create policy bloqueios_gerir on bloqueios for all to authenticated
-using (public.gerencio_estab(estabelecimento_id))
-with check (public.gerencio_estab(estabelecimento_id));
+  execute 'alter table bloqueios enable row level security';
+
+  execute 'drop policy if exists bloqueios_ler on bloqueios';
+  execute $p$
+    create policy bloqueios_ler on bloqueios for select to anon, authenticated
+    using (
+      public.estab_disponivel(estabelecimento_id)
+      or public.gerencio_estab(estabelecimento_id)
+      or public.sou_barbeiro(barbeiro_id)
+    )
+  $p$;
+
+  execute 'drop policy if exists bloqueios_gerir on bloqueios';
+  execute $p$
+    create policy bloqueios_gerir on bloqueios for all to authenticated
+    using (public.gerencio_estab(estabelecimento_id))
+    with check (public.gerencio_estab(estabelecimento_id))
+  $p$;
+end $$;
