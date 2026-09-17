@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Criar conta — BarberHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="index.html">
+      <span class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>
+      </span>
+      <span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span>
+    </a>
+    <div class="top-cta">
+      <a class="btn btn-outline btn-sm" href="entrar.html">Entrar</a>
+    </div>
+  </div>
+</header>
+
+<main class="acesso">
+  <div class="caixa">
+    <h1>Criar conta</h1>
+    <p class="legenda">É de graça. Leva menos de um minuto.</p>
+
+    <form id="form-cadastro" novalidate>
+      <div class="campo">
+        <label for="nome">Nome</label>
+        <input id="nome" type="text" autocomplete="name" placeholder="Como quer ser chamado" required />
+      </div>
+      <div class="campo">
+        <label for="telefone">Telefone</label>
+        <input id="telefone" type="tel" autocomplete="tel" placeholder="(41) 90000-0000" inputmode="tel" />
+      </div>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" autocomplete="email" placeholder="voce@email.com" required />
+      </div>
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" minlength="6" required />
+      </div>
+      <button class="btn btn-solid" type="submit" id="botao">Criar minha conta</button>
+    </form>
+
+    <div class="aviso" id="aviso" role="status"></div>
+
+    <div class="divisor">ou</div>
+
+    <button class="google" type="button" id="google">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.2-.4-4.6H24v9.1h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.9l-7.6-5.9c-2.1 1.4-4.8 2.3-8.3 2.3-6.4 0-11.7-3.7-13.6-8.8l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+      Continuar com Google
+    </button>
+
+    <p class="rodape-caixa">Já tem conta? <a href="entrar.html">Entrar</a></p>
+    <a class="voltar" href="index.html">← Voltar para o início</a>
+  </div>
+</main>
+
+<script type="module">
+import { sb, traduzErro } from './config.js';
+
+const form   = document.getElementById('form-cadastro');
+const aviso  = document.getElementById('aviso');
+const botao  = document.getElementById('botao');
+const google = document.getElementById('google');
+
+function mostrar(texto, tipo = 'erro') {
+  aviso.textContent = texto;
+  aviso.className = 'aviso ' + tipo;
+}
+
+const { data: { session } } = await sb.auth.getSession();
+if (session) location.replace('meus-agendamentos.html');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nome     = document.getElementById('nome').value.trim();
+  const telefone = document.getElementById('telefone').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  const senha    = document.getElementById('senha').value;
+
+  if (!nome)            return mostrar('Informe seu nome.');
+  if (!email)           return mostrar('Informe seu e-mail.');
+  if (senha.length < 6) return mostrar('A senha precisa ter pelo menos 6 caracteres.');
+
+  botao.disabled = true;
+  botao.textContent = 'Criando...';
+
+  // nome e telefone vão no metadata; o gatilho do banco cria o perfil com eles
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: senha,
+    options: { data: { nome, telefone } }
+  });
+
+  if (error) {
+    mostrar(traduzErro(error.message));
+    botao.disabled = false;
+    botao.textContent = 'Criar minha conta';
+    return;
+  }
+
+  // Com a confirmação de e-mail desligada, a sessão já vem pronta.
+  if (data.session) {
+    location.href = 'meus-agendamentos.html';
+  } else {
+    mostrar('Conta criada. Confirme o e-mail que enviamos para entrar.', 'ok');
+    botao.textContent = 'Conta criada';
+  }
+});
+
+google.addEventListener('click', async () => {
+  google.disabled = true;
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: new URL('meus-agendamentos.html', location.href).href }
+  });
+  if (error) {
+    mostrar(traduzErro(error.message));
+    google.disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>

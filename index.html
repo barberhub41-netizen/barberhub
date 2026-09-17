@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BarberHub — Encontre e agende na barbearia certa</title>
+<meta name="description" content="Compare barbearias, veja serviços e preços, escolha o profissional e agende seu horário." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-scissors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><polygon points="12 3 14.9 9.1 21.5 10 16.7 14.7 17.9 21.3 12 18.2 6.1 21.3 7.3 14.7 2.5 10 9.1 9.1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8z"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"/><path d="M3 12V10a4 4 0 0 1 4-4h14"/><polyline points="7 22 3 18 7 14"/><path d="M21 12v2a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-2a4 4 0 0 0-3-3.9"/><path d="M16.5 3.6a4 4 0 0 1 0 6.8"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 13.5 13 21a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 2.6 12l.4-7a2 2 0 0 1 2-2l7-.4a2 2 0 0 1 1.5.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.4"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12.5 9.5 18 20 6.5"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.4 9.2a2.7 2.7 0 1 1 3.4 3.1c-.6.2-.8.7-.8 1.3v.5"/><line x1="12" y1="17.4" x2="12" y2="17.5"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="index.html">
+      <span class="logo-mark"><svg><use href="#i-scissors"/></svg></span>
+      <span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span>
+    </a>
+    <nav class="menu">
+      <span class="on">Sou cliente</span>
+      <a href="#barbearias">Barbearias</a>
+      <a href="#como-comecar">Como começar</a>
+      <a href="#duvidas">Dúvidas</a>
+      <a class="hl" href="estabelecimento.html">Sou estabelecimento</a>
+    </nav>
+    <div class="top-cta" id="area-usuario">
+      <a class="btn btn-outline btn-sm" href="entrar.html">Entrar</a>
+      <a class="btn btn-solid btn-sm" href="cadastro.html">Criar conta</a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap hero-in">
+      <h1>Barber<i>Hub</i></h1>
+      <p class="sub">Uma nova forma de marcar o seu horário de sempre.</p>
+
+      <form class="search" action="buscar.html" method="get">
+        <svg><use href="#i-search"/></svg>
+        <input type="search" name="q" placeholder="Encontre um estabelecimento" aria-label="Encontre um estabelecimento" />
+        <button class="btn btn-solid btn-sm" type="submit">Buscar</button>
+      </form>
+
+      <div class="chips">
+        <a class="chip" href="buscar.html?cidade=S%C3%A3o%20Paulo">São Paulo</a>
+        <a class="chip" href="buscar.html?cidade=Curitiba">Curitiba</a>
+        <a class="chip" href="buscar.html?cidade=Rio%20de%20Janeiro">Rio de Janeiro</a>
+        <a class="chip" href="buscar.html?cidade=Belo%20Horizonte">Belo Horizonte</a>
+      </div>
+
+      <div><a class="btn btn-solid" href="buscar.html">Encontrar uma barbearia</a></div>
+      <p class="hero-foot">Horários, serviços e formas de pagamento vêm direto do perfil de cada estabelecimento.</p>
+    </div>
+  </section>
+
+  <section id="barbearias" class="block">
+    <div class="wrap">
+      <div class="head">
+        <h2>Empresas próximas</h2>
+        <p>Assim os estabelecimentos aparecem na busca: nota, endereço e distância de onde você está.</p>
+        <div class="rule"></div>
+      </div>
+      <div class="cards">
+        <a class="card" href="buscar.html">
+          <span class="avatar"><svg><use href="#i-scissors"/></svg><span class="badge">★ 5.0</span></span>
+          <span class="card-txt"><b>Barbearia exemplo</b><span>Rua das Palmeiras, 120 — Centro</span><em><svg><use href="#i-pin"/></svg>1,07 km</em></span>
+          <span class="next"><svg><use href="#i-next"/></svg></span>
+        </a>
+        <a class="card" href="buscar.html">
+          <span class="avatar"><svg><use href="#i-scissors"/></svg><span class="badge">★ 4.8</span></span>
+          <span class="card-txt"><b>Estúdio exemplo</b><span>Av. Brasil, 980 — Água Verde</span><em><svg><use href="#i-pin"/></svg>1,29 km</em></span>
+          <span class="next"><svg><use href="#i-next"/></svg></span>
+        </a>
+        <a class="card" href="buscar.html">
+          <span class="avatar"><svg><use href="#i-scissors"/></svg><span class="badge">★ 4.9</span></span>
+          <span class="card-txt"><b>Barber club exemplo</b><span>Rua Sete de Abril, 54 — Portão</span><em><svg><use href="#i-pin"/></svg>2,32 km</em></span>
+          <span class="next"><svg><use href="#i-next"/></svg></span>
+        </a>
+        <a class="card" href="buscar.html?cidade=S%C3%A3o%20Paulo">
+          <span class="avatar"><svg><use href="#i-pin"/></svg></span>
+          <span class="card-txt"><b>São Paulo</b><span>Ver estabelecimentos disponíveis</span></span>
+          <span class="next"><svg><use href="#i-next"/></svg></span>
+        </a>
+        <a class="card" href="buscar.html?cidade=Curitiba">
+          <span class="avatar"><svg><use href="#i-pin"/></svg></span>
+          <span class="card-txt"><b>Curitiba</b><span>Ver estabelecimentos disponíveis</span></span>
+          <span class="next"><svg><use href="#i-next"/></svg></span>
+        </a>
+        <a class="card" href="buscar.html?cidade=Rio%20de%20Janeiro">
+          <span class="avatar"><svg><use href="#i-pin"/></svg></span>
+          <span class="card-txt"><b>Rio de Janeiro</b><span>Ver estabelecimentos disponíveis</span></span>
+          <span class="next"><svg><use href="#i-next"/></svg></span>
+        </a>
+      </div>
+      <p class="note">Os três primeiros cards são ilustrativos. A lista real será carregada quando o cadastro de estabelecimentos estiver ligado.</p>
+    </div>
+  </section>
+
+  <section class="block alt">
+    <div class="wrap">
+      <div class="head"><h2>Nosso objetivo</h2><div class="rule"></div></div>
+      <div class="goals">
+        <article class="goal">
+          <svg><use href="#i-clock"/></svg>
+          <h3>Economizar seu tempo</h3>
+          <p>Veja em segundos quem tem horário livre hoje, sem ligação e sem fila no WhatsApp.</p>
+        </article>
+        <article class="goal">
+          <svg><use href="#i-tag"/></svg>
+          <h3>Nada de surpresa no preço</h3>
+          <p>Cada serviço mostra valor e duração antes de você confirmar o agendamento.</p>
+        </article>
+        <article class="goal">
+          <svg><use href="#i-users"/></svg>
+          <h3>Cortar com quem você confia</h3>
+          <p>Escolha o profissional pelo nome e acompanhe a agenda dele, não só a da barbearia.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="head">
+        <h2>O que você resolve pelo BarberHub</h2>
+        <div class="rule"></div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><svg><use href="#i-search"/></svg><b>Busca com filtro</b><i></i><span>Cidade, bairro e serviço</span></div>
+        <div class="tile"><svg><use href="#i-calendar"/></svg><b>Agenda em tempo real</b><i></i><span>Só o que está livre</span></div>
+        <div class="tile"><svg><use href="#i-tag"/></svg><b>Preços à vista</b><i></i><span>Valor e duração</span></div>
+        <div class="tile"><svg><use href="#i-users"/></svg><b>Escolha do profissional</b><i></i><span>Agenda por barbeiro</span></div>
+        <div class="tile"><svg><use href="#i-repeat"/></svg><b>Remarcar e cancelar</b><i></i><span>Pelo próprio app</span></div>
+        <div class="tile"><svg><use href="#i-bell"/></svg><b>Lembrete de horários</b><i></i><span>Aviso antes do corte</span></div>
+        <div class="tile"><svg><use href="#i-star"/></svg><b>Histórico e avaliação</b><i></i><span>Repita o mesmo pedido</span></div>
+        <div class="tile"><svg><use href="#i-card"/></svg><b>Planos e pacotes</b><i></i><span>Quando a barbearia oferece</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-comecar" class="block alt">
+    <div class="wrap">
+      <div class="head"><h2>Como começar</h2><div class="rule"></div></div>
+      <div class="steps">
+        <article class="step">
+          <div class="step-n">1</div>
+          <h3>Crie sua conta</h3>
+          <p>Nome, telefone e e-mail. A conta de cliente é gratuita.</p>
+        </article>
+        <article class="step">
+          <div class="step-n">2</div>
+          <h3>Escolha a barbearia</h3>
+          <p>Busque por cidade, bairro ou serviço e abra o perfil do estabelecimento.</p>
+        </article>
+        <article class="step">
+          <div class="step-n">3</div>
+          <h3>Marque seu horário</h3>
+          <p>Selecione serviço, profissional e horário. A confirmação chega na hora.</p>
+        </article>
+      </div>
+      <div class="center-cta"><a class="btn btn-solid" href="buscar.html">Clique aqui e comece agora</a></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <h2>Tudo sobre a barbearia, antes de marcar</h2>
+        <p>O perfil reúne o que a própria barbearia cadastrou — nada de informação desatualizada.</p>
+        <ul>
+          <li><svg><use href="#i-check"/></svg><span><b>Serviços e preços</b> com a duração de cada atendimento.</span></li>
+          <li><svg><use href="#i-check"/></svg><span><b>Equipe de barbeiros</b> e a agenda individual de cada um.</span></li>
+          <li><svg><use href="#i-check"/></svg><span><b>Fotos, endereço e horário</b> de funcionamento.</span></li>
+          <li><svg><use href="#i-check"/></svg><span><b>Formas de pagamento</b> e planos de assinatura, quando houver.</span></li>
+        </ul>
+      </div>
+      <div class="shop">
+        <div class="shop-cover"><span class="shop-logo"><svg><use href="#i-scissors"/></svg></span></div>
+        <div class="shop-body">
+          <h3>Barbearia exemplo</h3>
+          <p>Rua das Palmeiras, 120 — Centro · Aberto até 20h</p>
+          <div class="row"><b>Corte social</b><span>30 min · R$ 45</span></div>
+          <div class="row"><b>Corte + barba</b><span>50 min · R$ 70</span></div>
+          <div class="row"><b>Barba terapia</b><span>40 min · R$ 55</span></div>
+          <div class="row"><b>Plano mensal</b><span>4 cortes · R$ 150</span></div>
+          <a class="btn btn-solid" href="buscar.html">Abrir perfil</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip">
+    <div class="wrap">
+      <h2>Tem uma barbearia?</h2>
+      <p>Cadastre o estabelecimento, configure a agenda da equipe e apareça para quem procura na sua cidade.</p>
+      <a class="btn btn-white" href="estabelecimento.html">Acessar área do estabelecimento</a>
+    </div>
+  </section>
+
+  <section id="duvidas" class="block">
+    <div class="wrap">
+      <div class="head"><h2>Perguntas frequentes</h2><div class="rule"></div></div>
+      <div class="faq">
+        <div><h3>Preciso pagar para agendar?</h3><p>Não. A conta de cliente é gratuita. O valor do serviço é acertado com a barbearia, conforme as formas de pagamento que ela aceita.</p></div>
+        <div><h3>Como cancelo ou remarco um horário?</h3><p>Em “Meus agendamentos”, abra o atendimento e escolha remarcar ou cancelar. Cada barbearia define até quando a alteração é permitida.</p></div>
+        <div><h3>Posso escolher o barbeiro?</h3><p>Sim, quando o estabelecimento cadastra a equipe. Você vê a agenda de cada profissional e marca com quem preferir.</p></div>
+        <div><h3>Por que uma barbearia não aparece na busca?</h3><p>Só aparecem no catálogo os estabelecimentos que concluíram o cadastro e disponibilizaram o perfil.</p></div>
+        <div><h3>Preciso instalar algum aplicativo?</h3><p>Não. O BarberHub funciona pelo navegador do celular e do computador.</p></div>
+        <div><h3>Meus dados ficam guardados?</h3><p>Ficam apenas os dados necessários para o agendamento e o histórico dos seus atendimentos.</p></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-cols">
+      <div>
+        <a class="logo" href="index.html">
+          <span class="logo-mark"><svg><use href="#i-scissors"/></svg></span>
+          <span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span>
+        </a>
+        <p class="foot-about">Plataforma de agendamento para barbearias e seus clientes.</p>
+      </div>
+      <div>
+        <h4>Cliente</h4>
+        <ul>
+          <li><a href="buscar.html">Buscar barbearia</a></li>
+          <li><a href="meus-agendamentos.html">Meus agendamentos</a></li>
+          <li><a href="cadastro.html">Criar conta</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Estabelecimento</h4>
+        <ul>
+          <li><a href="estabelecimento.html">Cadastrar barbearia</a></li>
+          <li><a href="estabelecimento.html">Painel de gestão</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Ajuda</h4>
+        <ul>
+          <li><a href="#duvidas">Perguntas frequentes</a></li>
+          <li><a href="#como-comecar">Como começar</a></li>
+          <li><a href="index.html">Início</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bar">
+      <span>© 2026 BarberHub. Portal para clientes.</span>
+      <span>Todos os direitos reservados.</span>
+    </div>
+  </div>
+</footer>
+
+<a class="helper" href="#duvidas" aria-label="Ir para as perguntas frequentes"><svg><use href="#i-help"/></svg></a>
+
+<script type="module">
+  import { sb } from './config.js';
+
+  const area = document.getElementById('area-usuario');
+  const { data: { session } } = await sb.auth.getSession();
+
+  if (session) {
+    const { data: perfil } = await sb
+      .from('perfis').select('nome').eq('id', session.user.id).maybeSingle();
+    const nome = (perfil?.nome || session.user.email).split(' ')[0];
+    area.innerHTML =
+      '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Meus agendamentos</a>' +
+      '<a class="btn btn-solid btn-sm" href="#" id="sair">Sair, ' + nome + '</a>';
+    document.getElementById('sair').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await sb.auth.signOut();
+      location.reload();
+    });
+  }
+</script>
+</body>
+</html>
