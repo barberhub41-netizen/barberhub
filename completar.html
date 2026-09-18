@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Completar cadastro — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="acesso">
+  <div class="caixa">
+    <div class="enviar" style="justify-content:center;margin-bottom:22px">
+      <span class="previa" id="previa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+      </span>
+    </div>
+
+    <h1>Falta pouco</h1>
+    <p class="legenda" id="saudacao">Só mais dois campos e sua conta está pronta.</p>
+
+    <form id="form" novalidate>
+      <div class="campo">
+        <label for="nome">Nome</label>
+        <input id="nome" type="text" autocomplete="name" required />
+      </div>
+      <div class="campo">
+        <label for="cpf">CPF</label>
+        <input id="cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" required />
+      </div>
+      <div class="campo">
+        <label for="telefone">Telefone</label>
+        <input id="telefone" type="tel" autocomplete="tel" placeholder="(41) 90000-0000" />
+        <p class="dica" style="color:var(--dim);font-size:12.5px;margin-top:6px;text-transform:none;letter-spacing:0">
+          É por aqui que a barbearia te avisa se algo mudar.
+        </p>
+      </div>
+      <button class="btn btn-solid" type="submit" id="botao">Concluir cadastro</button>
+    </form>
+
+    <div class="aviso" id="aviso" role="status"></div>
+
+    <button class="voltar" id="sair" style="background:none;border:0;width:100%;cursor:pointer;font-family:var(--font)">
+      Sair e usar outra conta
+    </button>
+  </div>
+</main>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, meuPerfil, fotoDoPerfil,
+         mascaraCpf, cpfValido, soDigitos, escapar } from './app.js';
+
+// aqui o CPF ainda não existe — por isso a exigência fica desligada
+const sessao = await exigirLogin({ exigirCpf: false });
+montarTopo('');
+
+const el = (id) => document.getElementById(id);
+const destino = new URLSearchParams(location.search).get('voltar') || 'meus-agendamentos.html';
+
+const dizer = (t, tipo = 'erro') => { el('aviso').textContent = t; el('aviso').className = 'aviso ' + tipo; };
+
+mascaraCpf(el('cpf'));
+
+const perfil = await meuPerfil(sessao);
+
+// já está completo? não tem o que fazer aqui
+const { data: completo } = await sb.rpc('meu_cadastro_completo');
+if (completo) location.replace(destino);
+
+el('nome').value = perfil?.nome || '';
+el('telefone').value = perfil?.telefone || '';
+
+const foto = fotoDoPerfil(perfil);
+if (foto) el('previa').innerHTML = '<img src="' + foto + '" alt="Sua foto" />';
+
+if (perfil?.nome) {
+  el('saudacao').textContent =
+    'Oi, ' + escapar(perfil.nome.split(' ')[0]) + '. Trouxemos seus dados. Falta só o CPF.';
+}
+
+el('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const nome = el('nome').value.trim();
+  if (!nome) return dizer('Informe seu nome.');
+  if (!cpfValido(el('cpf').value)) return dizer('CPF inválido. Confira os números.');
+
+  el('botao').disabled = true;
+  el('botao').textContent = 'Salvando...';
+
+  const digitos = soDigitos(el('cpf').value);
+
+  const { data: gravou } = await sb.rpc('gravar_meu_cpf', { p_cpf: digitos });
+  if (!gravou?.ok) {
+    dizer(gravou?.motivo || 'Não foi possível gravar o CPF.');
+    el('botao').disabled = false;
+    el('botao').textContent = 'Concluir cadastro';
+    return;
+  }
+
+  const { error } = await sb.from('perfis').update({
+    nome,
+    telefone: el('telefone').value.trim() || null
+  }).eq('id', sessao.user.id);
+
+  el('botao').disabled = false;
+  el('botao').textContent = 'Concluir cadastro';
+
+  if (error) return dizer('Não foi possível salvar: ' + error.message);
+
+  location.href = destino;
+});
+
+el('sair').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.href = 'entrar.html';
+});
+</script>
+
+</body>
+</html>

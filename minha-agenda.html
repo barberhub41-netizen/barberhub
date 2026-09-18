@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Minha agenda — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Minha agenda</h1>
+    <p class="legenda" id="legenda">Os atendimentos marcados com você.</p>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="barra">
+    <button class="btn btn-outline" id="ontem" type="button">←</button>
+    <input id="data" type="date" class="entrada-data" />
+    <button class="btn btn-outline" id="amanha" type="button">→</button>
+    <button class="btn btn-outline" id="hoje" type="button">Hoje</button>
+    <select id="onde" class="entrada-data" style="display:none"></select>
+  </div>
+  <div id="resumo"></div>
+  <div id="lista"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, moeda, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('');
+
+const conteudo = document.getElementById('conteudo');
+
+const { data: vinculos, error } = await sb.rpc('onde_sou_barbeiro');
+
+if (error) {
+  conteudo.innerHTML = '<div class="vazio"><b>Não foi possível carregar</b><p>' +
+    escapar(error.message) + '</p></div>';
+} else if (!vinculos?.length) {
+  conteudo.innerHTML = '<div class="vazio">' +
+    '<b>Você não está cadastrado como profissional</b>' +
+    '<p>Esta tela é para quem atende numa barbearia. Se você é cliente, seus horários ' +
+    'estão em Meus agendamentos. Se deveria ter acesso, peça ao dono para cadastrar ' +
+    'o seu e-mail na equipe.</p>' +
+    '<a class="btn btn-solid" href="meus-agendamentos.html">Meus agendamentos</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar(vinculos);
+}
+
+function iniciar(vinculos) {
+  const el = (id) => document.getElementById(id);
+  let atual = vinculos[0];
+
+  if (vinculos.length > 1) {
+    el('onde').style.display = '';
+    el('onde').innerHTML = vinculos.map(v =>
+      '<option value="' + v.barbeiro_id + '">' + escapar(v.nome_estabelecimento) + '</option>').join('');
+    el('onde').addEventListener('change', () => {
+      atual = vinculos.find(v => v.barbeiro_id === el('onde').value);
+      carregar();
+    });
+  }
+
+  el('legenda').textContent = atual.nome_barbeiro + ' · ' + atual.nome_estabelecimento;
+
+  const iso = (d) => d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const hora = (d) => String(d.getHours()).padStart(2, '0') + ':' +
+                      String(d.getMinutes()).padStart(2, '0');
+
+  el('data').value = iso(new Date());
+
+  function mover(dias) {
+    const d = new Date(el('data').value + 'T12:00:00');
+    d.setDate(d.getDate() + dias);
+    el('data').value = iso(d);
+    carregar();
+  }
+
+  async function carregar() {
+    el('lista').innerHTML = '<p class="carregando">Carregando...</p>';
+    el('resumo').innerHTML = '';
+
+    const de  = new Date(el('data').value + 'T00:00:00');
+    const ate = new Date(el('data').value + 'T23:59:59');
+
+    const [agenda, itens] = await Promise.all([
+      sb.from('agendamentos')
+        .select('id, inicio, fim, status, valor_centavos, cliente_nome, cliente_telefone, agendamento_servicos(nome, ordem), perfis(nome, telefone)')
+        .eq('barbeiro_id', atual.barbeiro_id)
+        .gte('inicio', de.toISOString()).lte('inicio', ate.toISOString())
+        .order('inicio'),
+      // a comissão sai das comandas, e o barbeiro só vê a própria
+      sb.from('comanda_itens')
+        .select('total_centavos, comissao_centavos, criado_em')
+        .eq('barbeiro_id', atual.barbeiro_id)
+        .gte('criado_em', de.toISOString()).lte('criado_em', ate.toISOString())
+    ]);
+
+    if (agenda.error) {
+      el('lista').innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' +
+        escapar(agenda.error.message) + '</p></div>';
+      return;
+    }
+
+    const lista = agenda.data || [];
+    const meusItens = itens.data || [];
+    const produzido = meusItens.reduce((t, i) => t + i.total_centavos, 0);
+    const comissao = meusItens.reduce((t, i) => t + i.comissao_centavos, 0);
+    const ativos = lista.filter(a => !['cancelado'].includes(a.status));
+
+    el('resumo').innerHTML = '<div class="kpis" style="margin-bottom:26px">' +
+      '<div class="kpi"><small>Atendimentos</small><b>' + ativos.length + '</b>' +
+        '<span>no dia</span></div>' +
+      '<div class="kpi"><small>Produzido</small><b>' + moeda(produzido) + '</b>' +
+        '<span>em comandas fechadas</span></div>' +
+      '<div class="kpi"><small>Sua comissão</small><b>' + moeda(comissao) + '</b>' +
+        '<span>no dia</span></div>' +
+    '</div>';
+
+    if (!lista.length) {
+      el('lista').innerHTML = '<div class="vazio"><b>Nenhum horário nesse dia</b>' +
+        '<p>Use as setas para ver outro dia.</p></div>';
+      return;
+    }
+
+    el('lista').innerHTML = lista.map(a => {
+      const i = new Date(a.inicio), f = new Date(a.fim);
+      const servicos = (a.agendamento_servicos || [])
+        .sort((x, y) => x.ordem - y.ordem).map(s => s.nome).join(' + ') || 'Atendimento';
+      const cliente = a.perfis?.nome || a.cliente_nome || 'Cliente';
+      const fone = a.perfis?.telefone || a.cliente_telefone;
+
+      return '<article class="agend">' +
+        '<div class="quando"><b>' + hora(i) + ' às ' + hora(f) + '</b>' +
+          '<span>' + Math.round((f - i) / 60000) + ' min</span></div>' +
+        '<div class="oque"><b>' + escapar(cliente) + '</b>' +
+          '<span>' + escapar(servicos) +
+          (fone ? ' · ' + escapar(fone) : '') + '</span></div>' +
+        '<span class="selo ' + a.status + '">' + a.status + '</span>' +
+        (a.status === 'pendente'
+          ? '<button class="btn btn-solid" data-status="confirmado" data-id="' + a.id + '">Confirmar</button>'
+          : '') +
+        (a.status === 'confirmado'
+          ? '<button class="btn btn-solid" data-status="concluido" data-id="' + a.id + '">Concluir</button>'
+          : '') +
+      '</article>';
+    }).join('');
+  }
+
+  el('lista').addEventListener('click', async (e) => {
+    const botao = e.target.closest('[data-status]');
+    if (!botao) return;
+    botao.disabled = true;
+    const { error } = await sb.from('agendamentos')
+      .update({ status: botao.dataset.status }).eq('id', botao.dataset.id);
+    if (error) {
+      alert('Não foi possível atualizar: ' + error.message);
+      botao.disabled = false;
+      return;
+    }
+    carregar();
+  });
+
+  el('ontem').addEventListener('click', () => mover(-1));
+  el('amanha').addEventListener('click', () => mover(1));
+  el('hoje').addEventListener('click', () => { el('data').value = iso(new Date()); carregar(); });
+  el('data').addEventListener('change', carregar);
+
+  carregar();
+}
+</script>
+
+</body>
+</html>

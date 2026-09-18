@@ -50,6 +50,12 @@
             <input id="nascimento" type="date" />
             <p class="dica">Opcional. Algumas barbearias dão brinde de aniversário.</p>
           </div>
+          <div class="campo">
+            <label for="cpf">CPF</label>
+            <input id="cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" />
+            <p class="dica" id="dica-cpf">Depois de gravado, não muda.</p>
+          </div>
+
           <div class="campo larga">
             <label for="email">E-mail</label>
             <input id="email" type="email" disabled />
@@ -61,6 +67,7 @@
         <div class="acoes">
           <button class="btn btn-solid" type="submit" id="salvar">Salvar</button>
           <a class="btn btn-outline" href="meus-agendamentos.html">Meus agendamentos</a>
+          <a class="btn btn-outline" href="minha-agenda.html" id="link-barbeiro" style="display:none">Minha agenda de trabalho</a>
         </div>
       </form>
     </div>
@@ -89,7 +96,8 @@
 <script type="module">
 import { sb, montarTopo, exigirLogin, escapar,
          BUCKET_PERFIS, urlAvatar, urlImagem, conferirImagem, extensaoDe,
-         estadoPush, ativarPush, desativarPush } from './app.js';
+         estadoPush, ativarPush, desativarPush,
+         mascaraCpf, cpfValido, formatarCpf, soDigitos } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('');
@@ -106,7 +114,7 @@ let fotoAtual = null;
 // Dados
 // ------------------------------------------------------------
 const { data: perfil, error } = await sb.from('perfis')
-  .select('nome, telefone, data_nascimento, foto_caminho')
+  .select('nome, telefone, data_nascimento, foto_caminho, foto_url')
   .eq('id', sessao.user.id).maybeSingle();
 
 if (error) {
@@ -115,6 +123,14 @@ if (error) {
   el('nome').value = perfil.nome || '';
   el('telefone').value = perfil.telefone || '';
   el('nascimento').value = perfil.data_nascimento || '';
+  const { data: meuCpf } = await sb.rpc('meu_cpf');
+  if (meuCpf) {
+    el('cpf').value = formatarCpf(meuCpf);
+    el('cpf').disabled = true;
+  } else {
+    mascaraCpf(el('cpf'));
+    el('dica-cpf').textContent = 'Sua conta é anterior ao CPF obrigatório. Preencha uma vez.';
+  }
   fotoAtual = perfil.foto_caminho;
   desenharFoto();
 }
@@ -124,6 +140,10 @@ function desenharFoto() {
   if (fotoAtual) {
     el('previa').innerHTML = '<img src="' + urlAvatar(fotoAtual) + '" alt="Sua foto" />';
     el('remover').style.display = '';
+  } else if (perfil?.foto_url) {
+    // veio do Google; some quando a pessoa enviar uma própria
+    el('previa').innerHTML = '<img src="' + perfil.foto_url + '" alt="Sua foto" />';
+    el('remover').style.display = 'none';
   } else {
     el('previa').innerHTML = PESSOA;
     el('remover').style.display = 'none';
@@ -135,16 +155,36 @@ el('form').addEventListener('submit', async (e) => {
   const nome = el('nome').value.trim();
   if (!nome) return dizer('Informe seu nome.');
 
-  el('salvar').disabled = true;
-  const { error } = await sb.from('perfis').update({
+  const mudanca = {
     nome,
     telefone: el('telefone').value.trim() || null,
     data_nascimento: el('nascimento').value || null
-  }).eq('id', sessao.user.id);
+  };
+
+  el('salvar').disabled = true;
+
+  // o CPF é gravado por função própria, uma vez só
+  let gravouCpf = false;
+  if (!el('cpf').disabled && el('cpf').value.trim()) {
+    if (!cpfValido(el('cpf').value)) {
+      el('salvar').disabled = false;
+      return dizer('CPF inválido. Confira os números.');
+    }
+
+    const { data: r } = await sb.rpc('gravar_meu_cpf', { p_cpf: soDigitos(el('cpf').value) });
+    if (!r?.ok) {
+      el('salvar').disabled = false;
+      return dizer(r?.motivo || 'Não foi possível gravar o CPF.');
+    }
+    gravouCpf = true;
+  }
+
+  const { error } = await sb.from('perfis').update(mudanca).eq('id', sessao.user.id);
   el('salvar').disabled = false;
 
   if (error) return dizer('Não foi possível salvar: ' + error.message);
   dizer('Perfil atualizado.', 'ok');
+  if (gravouCpf) el('cpf').disabled = true;
   montarTopo('');
 });
 
@@ -279,6 +319,10 @@ botaoPush.addEventListener('click', async () => {
 });
 
 pintarPush();
+
+sb.rpc('onde_sou_barbeiro').then(({ data }) => {
+  if (data?.length) el('link-barbeiro').style.display = '';
+});
 
 carregarFavoritas();
 </script>

@@ -33,10 +33,20 @@
     <h1>Entrar</h1>
     <p class="legenda">Acesse para ver e gerenciar seus agendamentos.</p>
 
+    <div class="filtros" style="justify-content:center;margin-bottom:6px">
+      <button class="filtro on" data-modo="email" type="button">E-mail</button>
+      <button class="filtro" data-modo="cpf" type="button">CPF</button>
+    </div>
+
     <form id="form-entrar" novalidate>
-      <div class="campo">
+      <div class="campo" id="campo-email">
         <label for="email">E-mail</label>
-        <input id="email" type="email" autocomplete="email" placeholder="voce@email.com" required />
+        <input id="email" type="email" autocomplete="email" placeholder="voce@email.com" />
+      </div>
+
+      <div class="campo" id="campo-cpf" style="display:none">
+        <label for="cpf">CPF</label>
+        <input id="cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" />
       </div>
       <div class="campo">
         <label for="senha">Senha</label>
@@ -48,12 +58,6 @@
 
     <div class="aviso" id="aviso" role="status"></div>
 
-    <div class="divisor">ou</div>
-
-    <button class="google" type="button" id="google">
-      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.2-.4-4.6H24v9.1h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.9l-7.6-5.9c-2.1 1.4-4.8 2.3-8.3 2.3-6.4 0-11.7-3.7-13.6-8.8l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-      Continuar com Google
-    </button>
 
     <p class="rodape-caixa">Não tem conta? <a href="cadastro.html">Criar conta</a></p>
     <a class="voltar" href="index.html">← Voltar para o início</a>
@@ -61,13 +65,29 @@
 </main>
 
 <script type="module">
-import { sb, traduzErro } from './config.js';
+import { sb, mascaraCpf, cpfValido, soDigitos } from './app.js';
+import { traduzErro, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 const destino = new URLSearchParams(location.search).get('voltar') || 'meus-agendamentos.html';
 const form   = document.getElementById('form-entrar');
 const aviso  = document.getElementById('aviso');
 const botao  = document.getElementById('botao');
-const google = document.getElementById('google');
+const cpf    = document.getElementById('cpf');
+let modo = 'email';
+
+mascaraCpf(cpf);
+
+document.querySelector('.filtros').addEventListener('click', (e) => {
+  const botao = e.target.closest('[data-modo]');
+  if (!botao) return;
+  document.querySelectorAll('.filtro').forEach(f => f.classList.remove('on'));
+  botao.classList.add('on');
+  modo = botao.dataset.modo;
+  document.getElementById('campo-email').style.display = modo === 'email' ? '' : 'none';
+  document.getElementById('campo-cpf').style.display = modo === 'cpf' ? '' : 'none';
+  aviso.textContent = '';
+  aviso.className = 'aviso';
+});
 
 function mostrar(texto, tipo = 'erro') {
   aviso.textContent = texto;
@@ -80,36 +100,68 @@ if (session) location.replace(destino);
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = document.getElementById('email').value.trim();
   const senha = document.getElementById('senha').value;
 
-  if (!email || !senha) return mostrar('Preencha o e-mail e a senha.');
+  if (!senha) return mostrar('Informe a senha.');
 
   botao.disabled = true;
   botao.textContent = 'Entrando...';
 
-  const { error } = await sb.auth.signInWithPassword({ email, password: senha });
-
-  if (error) {
-    mostrar(traduzErro(error.message));
+  const soltar = (mensagem) => {
+    mostrar(mensagem);
     botao.disabled = false;
     botao.textContent = 'Entrar';
-    return;
+  };
+
+  // ------------------------------------------------------------
+  // Por CPF: quem descobre o e-mail é a Edge Function, não o site
+  // ------------------------------------------------------------
+  if (modo === 'cpf') {
+    if (!cpfValido(cpf.value)) return soltar('CPF inválido. Confira os números.');
+
+    try {
+      const resposta = await fetch(SUPABASE_URL + '/functions/v1/entrar-cpf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ cpf: soDigitos(cpf.value), senha })
+      });
+
+      const r = await resposta.json().catch(() => ({}));
+
+      if (!resposta.ok || !r.ok) return soltar(r.erro || 'CPF ou senha incorretos.');
+
+      const { error } = await sb.auth.setSession({
+        access_token: r.access_token,
+        refresh_token: r.refresh_token
+      });
+
+      if (error) return soltar(traduzErro(error.message));
+
+      location.href = destino;
+      return;
+
+    } catch (erro) {
+      return soltar('Não foi possível falar com o servidor. Tente pelo e-mail.');
+    }
   }
+
+  // ------------------------------------------------------------
+  // Por e-mail
+  // ------------------------------------------------------------
+  const email = document.getElementById('email').value.trim();
+  if (!email) return soltar('Informe o e-mail.');
+
+  const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+
+  if (error) return soltar(traduzErro(error.message));
+
   location.href = destino;
 });
 
-google.addEventListener('click', async () => {
-  google.disabled = true;
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: new URL(destino, location.href).href }
-  });
-  if (error) {
-    mostrar(traduzErro(error.message));
-    google.disabled = false;
-  }
-});
 </script>
 
 </body>

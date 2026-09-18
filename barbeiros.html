@@ -51,6 +51,7 @@
 
 <script type="module">
 import { sb, montarTopo, exigirLogin, montarPainel, escapar } from './app.js';
+import { SUPABASE_URL } from './config.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
@@ -78,7 +79,7 @@ function iniciar() {
   async function carregar() {
     const { data, error } = await sb
       .from('barbeiros')
-      .select('id, nome, ativo, perfil_id, comissao_pct, comissao_produtos_pct')
+      .select('id, nome, ativo, perfil_id, email, comissao_pct, comissao_produtos_pct')
       .eq('estabelecimento_id', barbearia.id)
       .order('nome');
 
@@ -96,8 +97,12 @@ function iniciar() {
         '<span>' + (b.ativo ? 'Recebendo agendamentos' : 'Fora da agenda') +
         ' · comissão ' + Number(b.comissao_pct) + '% em serviços, ' +
         Number(b.comissao_produtos_pct) + '% em produtos' +
-        (b.perfil_id ? ' · tem login próprio' : '') + '</span></div>' +
+        (b.perfil_id ? ' · acesso liberado' + (b.email ? ' (' + escapar(b.email) + ')' : '') : ' · sem acesso') +
+        '</span></div>' +
         '<button class="btn btn-outline" data-comissao="' + b.id + '">Comissão</button>' +
+        (b.perfil_id
+          ? '<button class="btn btn-outline" data-tirar="' + b.id + '">Tirar acesso</button>'
+          : '<button class="btn btn-solid" data-acesso="' + b.id + '" data-nome="' + escapar(b.nome) + '">Criar acesso</button>') +
         '<button class="btn btn-outline" data-alternar="' + b.id + '" data-ativo="' + b.ativo + '">' +
           (b.ativo ? 'Afastar' : 'Reativar') + '</button>' +
         '<button class="btn btn-perigo" data-apagar="' + b.id + '">Excluir</button>' +
@@ -126,6 +131,65 @@ function iniciar() {
   });
 
   lista.addEventListener('click', async (e) => {
+    const acesso = e.target.closest('[data-acesso]');
+    if (acesso) {
+      const email = prompt(
+        'E-mail de acesso para ' + acesso.dataset.nome + '.\n\n' +
+        'O sistema cria a conta e mostra uma senha temporária. ' +
+        'Se a pessoa já tiver conta no BarberHub, ela é só ligada ao perfil.');
+      if (!email) return;
+
+      acesso.disabled = true;
+      acesso.textContent = 'Criando...';
+
+      const { data: { session } } = await sb.auth.getSession();
+      const resposta = await fetch(SUPABASE_URL + '/functions/v1/criar-barbeiro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + session.access_token
+        },
+        body: JSON.stringify({
+          barbeiro_id: acesso.dataset.acesso,
+          email: email.trim(),
+          nome: acesso.dataset.nome
+        })
+      });
+
+      const r = await resposta.json().catch(() => ({}));
+
+      acesso.disabled = false;
+      acesso.textContent = 'Criar acesso';
+
+      if (!resposta.ok || r.erro) {
+        alert('Não foi possível: ' + (r.erro || resposta.status));
+        return;
+      }
+
+      if (r.ja_tinha_conta) {
+        alert('Essa pessoa já tinha conta no BarberHub. O acesso foi ligado ao perfil dela — ' +
+              'ela entra com a senha que já usa.');
+      } else {
+        alert('Acesso criado.\n\n' +
+              'E-mail: ' + r.email + '\n' +
+              'Senha temporária: ' + r.senha + '\n\n' +
+              'Anote agora: esta senha não aparece de novo. ' +
+              'Peça para a pessoa trocar no primeiro acesso.');
+      }
+      carregar();
+      return;
+    }
+
+    const tirar = e.target.closest('[data-tirar]');
+    if (tirar) {
+      if (!confirm('Tirar o acesso desse profissional? A conta dele continua existindo, ' +
+                   'mas deixa de enxergar a agenda da barbearia.')) return;
+      tirar.disabled = true;
+      await sb.from('barbeiros').update({ perfil_id: null }).eq('id', tirar.dataset.tirar);
+      carregar();
+      return;
+    }
+
     const comissao = e.target.closest('[data-comissao]');
     if (comissao) {
       const atual = await sb.from('barbeiros')

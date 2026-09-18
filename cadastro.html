@@ -43,6 +43,14 @@
         <input id="telefone" type="tel" autocomplete="tel" placeholder="(41) 90000-0000" inputmode="tel" />
       </div>
       <div class="campo">
+        <label for="cpf">CPF</label>
+        <input id="cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off" required />
+        <p class="dica" style="color:var(--dim);font-size:12.5px;margin-top:6px;text-transform:none;letter-spacing:0">
+          Uma conta por CPF. Serve para a barbearia saber quem é quem.
+        </p>
+      </div>
+
+      <div class="campo">
         <label for="email">E-mail</label>
         <input id="email" type="email" autocomplete="email" placeholder="voce@email.com" required />
       </div>
@@ -55,12 +63,6 @@
 
     <div class="aviso" id="aviso" role="status"></div>
 
-    <div class="divisor">ou</div>
-
-    <button class="google" type="button" id="google">
-      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.2-.4-4.6H24v9.1h12.4c-.5 2.9-2.2 5.3-4.6 7l7.6 5.9c4.4-4.1 6.7-10.1 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.8-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.9l-7.6-5.9c-2.1 1.4-4.8 2.3-8.3 2.3-6.4 0-11.7-3.7-13.6-8.8l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-      Continuar com Google
-    </button>
 
     <p class="rodape-caixa">Já tem conta? <a href="entrar.html">Entrar</a></p>
     <a class="voltar" href="index.html">← Voltar para o início</a>
@@ -69,12 +71,14 @@
 
 <script type="module">
 import { sb, traduzErro } from './config.js';
+import { mascaraCpf, cpfValido, soDigitos } from './app.js';
 
 const destino = new URLSearchParams(location.search).get('voltar') || 'meus-agendamentos.html';
 const form   = document.getElementById('form-cadastro');
+const cpf    = document.getElementById('cpf');
+mascaraCpf(cpf);
 const aviso  = document.getElementById('aviso');
 const botao  = document.getElementById('botao');
-const google = document.getElementById('google');
 
 function mostrar(texto, tipo = 'erro') {
   aviso.textContent = texto;
@@ -92,17 +96,30 @@ form.addEventListener('submit', async (e) => {
   const senha    = document.getElementById('senha').value;
 
   if (!nome)            return mostrar('Informe seu nome.');
+  if (!cpfValido(cpf.value)) return mostrar('CPF inválido. Confira os números.');
   if (!email)           return mostrar('Informe seu e-mail.');
   if (senha.length < 6) return mostrar('A senha precisa ter pelo menos 6 caracteres.');
 
   botao.disabled = true;
   botao.textContent = 'Criando...';
 
-  // nome e telefone vão no metadata; o gatilho do banco cria o perfil com eles
+  // confere o CPF antes, para não criar login sem perfil
+  const { data: disponivel, error: erroCpf } = await sb.rpc('cpf_disponivel', {
+    p_cpf: soDigitos(cpf.value)
+  });
+
+  if (erroCpf || !disponivel?.ok) {
+    mostrar(disponivel?.motivo || 'Não foi possível conferir o CPF.');
+    botao.disabled = false;
+    botao.textContent = 'Criar minha conta';
+    return;
+  }
+
+  // nome, telefone e CPF vão no metadata; o gatilho do banco cria o perfil com eles
   const { data, error } = await sb.auth.signUp({
     email,
     password: senha,
-    options: { data: { nome, telefone } }
+    options: { data: { nome, telefone, cpf: soDigitos(cpf.value) } }
   });
 
   if (error) {
@@ -121,17 +138,6 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-google.addEventListener('click', async () => {
-  google.disabled = true;
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: new URL(destino, location.href).href }
-  });
-  if (error) {
-    mostrar(traduzErro(error.message));
-    google.disabled = false;
-  }
-});
 </script>
 
 </body>

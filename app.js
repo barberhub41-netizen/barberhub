@@ -15,22 +15,42 @@ export async function sessaoAtual() {
 
 // Usar no topo das páginas que exigem login.
 // Devolve a sessão, ou manda para o login e interrompe.
-export async function exigirLogin() {
+// Quem entrou pelo Google e ainda não tem CPF é levado antes
+// para completar o cadastro.
+export async function exigirLogin({ exigirCpf = true } = {}) {
   const sessao = await sessaoAtual();
   if (!sessao) {
-    location.replace('entrar.html');
+    const aqui = location.pathname.split('/').pop() + location.search;
+    location.replace('entrar.html?voltar=' + encodeURIComponent(aqui));
     throw new Error('sem sessao');
   }
+
+  if (exigirCpf) {
+    const { data: completo } = await sb.rpc('meu_cadastro_completo');
+    if (completo === false) {
+      const aqui = location.pathname.split('/').pop() + location.search;
+      location.replace('completar.html?voltar=' + encodeURIComponent(aqui));
+      throw new Error('cadastro incompleto');
+    }
+  }
+
   return sessao;
 }
 
 export async function meuPerfil(sessao) {
   const { data } = await sb
     .from('perfis')
-    .select('id, nome, telefone, papel')
+    .select('id, nome, telefone, papel, foto_caminho, foto_url')
     .eq('id', sessao.user.id)
     .maybeSingle();
   return data;
+}
+
+// A foto que vale: a enviada pela pessoa, senão a do provedor.
+export function fotoDoPerfil(perfil) {
+  if (!perfil) return null;
+  if (perfil.foto_caminho) return urlAvatar(perfil.foto_caminho);
+  return perfil.foto_url || null;
 }
 
 // ------------------------------------------------------------
@@ -57,7 +77,9 @@ export async function montarTopo(atual = '') {
         '<path d="M10.3 20a2 2 0 0 0 3.4 0"/></svg>' +
         '<span class="contador" id="contador" hidden>0</span>' +
       '</button>' +
-      '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>' +
+      (perfil?.papel === 'barbeiro'
+        ? '<a class="btn btn-outline btn-sm" href="minha-agenda.html">Minha agenda</a>'
+        : '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>') +
       '<a class="btn btn-solid btn-sm" href="perfil.html">' + escapar(nome) + '</a>';
   } else {
     direita =
@@ -653,4 +675,45 @@ export function manifestoDaBarbearia({ slug, nome, icone }) {
     ios.href = icone;
     document.head.appendChild(ios);
   }
+}
+
+// ============================================================
+// CPF
+// ============================================================
+export function soDigitos(texto = '') {
+  return String(texto).replace(/\D/g, '');
+}
+
+export function formatarCpf(texto = '') {
+  const n = soDigitos(texto).slice(0, 11);
+  return n
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+}
+
+// Mesma conferência que existe no banco, feita antes de enviar.
+export function cpfValido(texto = '') {
+  const n = soDigitos(texto);
+  if (n.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(n)) return false;
+
+  const digito = (ate) => {
+    let soma = 0;
+    for (let i = 0; i < ate; i++) soma += Number(n[i]) * (ate + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+
+  return digito(9) === Number(n[9]) && digito(10) === Number(n[10]);
+}
+
+// Liga a máscara num campo de CPF.
+export function mascaraCpf(campo) {
+  if (!campo) return;
+  campo.addEventListener('input', () => {
+    const posicaoFinal = campo.selectionStart === campo.value.length;
+    campo.value = formatarCpf(campo.value);
+    if (posicaoFinal) campo.setSelectionRange(campo.value.length, campo.value.length);
+  });
 }

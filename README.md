@@ -20,17 +20,19 @@ avaliacoes.html            avaliações recebidas, com resposta
 comandas.html              comandas do dia, itens e fechamento
 produtos.html              produtos e controle de estoque
 promocoes.html             cupons, aniversariantes e clientes sumidos
+minha-agenda.html          agenda do barbeiro funcionário
 planos.html                planos de assinatura, assinantes e fidelidade
 clientes.html              clientes da barbearia, consolidados
 relatorios.html            faturamento, faltas e quebras por período
 agenda.html                agenda do dia em calendário, com encaixe
 servicos.html              cadastro de serviços do estabelecimento
 barbeiros.html             cadastro da equipe
-entrar.html                login por e-mail/senha e Google
+entrar.html                login por e-mail/senha ou CPF/senha
 recuperar.html             pedido do link de nova senha
 nova-senha.html            definição da nova senha
+completar.html             completa o cadastro de quem entrou pelo Google
 perfil.html                perfil do cliente e favoritas
-cadastro.html              criação de conta de cliente
+cadastro.html              criação de conta de cliente (nome, CPF, e-mail, senha)
 meus-agendamentos.html     agendamentos do cliente, com cancelamento
 estabelecimento.html       cadastro e edição da barbearia
 app.js                     funções compartilhadas (sessão, topo, formatação)
@@ -51,9 +53,15 @@ sql/migracao-08-comandas-comissoes.sql  produtos, estoque, comandas, comissões
 sql/migracao-09-notificacoes.sql  avisos no sino do topo
 sql/migracao-10-push.sql       inscrições e disparo do push
 sql/migracao-11-cupons.sql     cupons de desconto
+sql/migracao-12-acesso-barbeiro.sql  login do profissional
+sql/migracao-13-cpf.sql        CPF obrigatório, um por conta
+sql/migracao-14-google-cpf.sql  dados do Google e login por CPF
+sql/migracao-15-proteger-cpf.sql  fecha a leitura do CPF por coluna
 sw.js                          service worker: push e cache básico
 manifest.json                  torna o site instalável
-supabase/functions/enviar-push/index.ts   Edge Function que entrega o push
+supabase/functions/enviar-push/index.ts     Edge Function que entrega o push
+supabase/functions/criar-barbeiro/index.ts  cria o login do profissional
+supabase/functions/entrar-cpf/index.ts      login por CPF e senha
 GERAR-CHAVES-VAPID.md          como gerar e onde guardar as chaves
 ```
 
@@ -160,6 +168,68 @@ No iPhone o caminho é outro: o iOS ignora o manifesto e usa a tag
 
 Para o ícone ficar bom, a logo cadastrada precisa ser quadrada e ter pelo
 menos 512 pixels de lado. O Chrome recusa instalar com ícone menor que 144.
+
+## CPF
+
+O cadastro exige CPF, com conferência dos dígitos no navegador e no banco,
+e há um índice único: **uma conta por CPF**. O número é guardado só com
+dígitos, e um gatilho impede que seja trocado depois de gravado — só admin
+altera.
+
+Contas criadas antes desta regra ficam sem CPF e continuam funcionando. O
+perfil oferece preencher uma vez.
+
+### Quem consegue ler
+
+Ninguém, direto. O privilégio de `select` **na coluna** `cpf` foi retirado de
+`anon` e `authenticated`, então nem o dono da barbearia enxerga o CPF dos
+clientes dele — mesmo tendo permissão de ler a linha para mostrar o nome na
+agenda. RLS trabalha por linha; separar coluna exige tirar o privilégio.
+
+O acesso acontece por duas funções:
+
+- `meu_cpf()` — devolve o CPF de quem está logado
+- `gravar_meu_cpf(cpf)` — grava uma vez, na própria conta
+
+### Sobre guardar em hash
+
+Hash simples de CPF não protege: existem cerca de 1,5 bilhão de números
+válidos, e testar todos leva segundos. Só faria sentido com um segredo
+guardado no Vault, e aí o número vira irrecuperável — o que conflita com o
+passo 14, já que Pix e boleto exigem o CPF do pagador.
+
+A senha não é assunto nosso: fica em `auth.users`, com bcrypt, gerenciada
+pelo Supabase. Nem a chave administrativa lê.
+
+Isso é dado pessoal. Quando for publicar (passo 15), ele precisa aparecer
+na política de privacidade, com a finalidade declarada.
+
+## Login com Google
+
+Removido das telas por escolha: o Google Cloud pede cartão de crédito no
+cadastro do projeto. O código de suporte continua no banco — a função
+`criar_perfil_novo_usuario` já aproveita nome, e-mail e foto de qualquer
+provedor, e `completar.html` pede só o CPF depois. Para reativar, basta
+configurar o provedor no Supabase e devolver o botão às telas de acesso.
+
+## Perfis de acesso
+
+Existe **um cadastro só**: a conta de pessoa. O que muda é o vínculo.
+
+| Situação | O que enxerga |
+|---|---|
+| Só tem conta | cliente: busca, agendamento, avaliação, favoritos |
+| É `dono_id` de um estabelecimento | o painel inteiro daquela unidade |
+| Tem `perfil_id` numa linha de `barbeiros` | `minha-agenda.html`: a própria agenda e a própria comissão |
+| `perfis.papel = 'admin'` | tudo, pelas políticas de RLS |
+
+O dono cria o acesso do profissional em Equipe → Criar acesso. A Edge
+Function `criar-barbeiro` cria a conta com uma senha temporária, mostrada
+uma única vez. Se a pessoa já tiver conta, ela é apenas ligada ao perfil.
+
+O barbeiro **não** vê faturamento, clientes, relatórios nem configurações —
+só a agenda dele e a comissão dele. Isso é garantido pelas políticas de RLS,
+não por esconder botão.
 
 ## Notificações
 
