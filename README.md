@@ -19,6 +19,7 @@ fotos.html                 upload da logo e das fotos
 avaliacoes.html            avaliações recebidas, com resposta
 comandas.html              comandas do dia, itens e fechamento
 produtos.html              produtos e controle de estoque
+promocoes.html             cupons, aniversariantes e clientes sumidos
 planos.html                planos de assinatura, assinantes e fidelidade
 clientes.html              clientes da barbearia, consolidados
 relatorios.html            faturamento, faltas e quebras por período
@@ -49,6 +50,7 @@ sql/migracao-07-perfil-favoritos.sql  perfil do cliente, foto, favoritos
 sql/migracao-08-comandas-comissoes.sql  produtos, estoque, comandas, comissões
 sql/migracao-09-notificacoes.sql  avisos no sino do topo
 sql/migracao-10-push.sql       inscrições e disparo do push
+sql/migracao-11-cupons.sql     cupons de desconto
 sw.js                          service worker: push e cache básico
 manifest.json                  torna o site instalável
 supabase/functions/enviar-push/index.ts   Edge Function que entrega o push
@@ -121,6 +123,8 @@ Todos podem ser executados mais de uma vez sem duplicar nada.
 | `comanda_itens` | itens da comanda, com comissão calculada |
 | `notificacoes` | avisos internos, criados por gatilho |
 | `push_assinaturas` | aparelhos inscritos para receber push |
+| `cupons` | códigos de desconto |
+| `cupom_usos` | quem usou qual cupom |
 
 Decisões que valem lembrar:
 
@@ -142,6 +146,20 @@ Decisões que valem lembrar:
   `disponivel`. Em `rascunho`, só o dono enxerga.
 
 ---
+
+## Aplicativo por barbearia
+
+O GitHub Pages só serve arquivo pronto, então o manifesto de cada
+estabelecimento é montado pelo **service worker**, que intercepta
+`manifest.json?slug=...` e responde com o nome e a logo daquela barbearia.
+O ícone também passa por ele (`icone-barbearia.png?u=...`), porque o
+manifesto exige ícone da mesma origem da página.
+
+No iPhone o caminho é outro: o iOS ignora o manifesto e usa a tag
+`apple-touch-icon`, trocada pelo JavaScript ao abrir o perfil.
+
+Para o ícone ficar bom, a logo cadastrada precisa ser quadrada e ter pelo
+menos 512 pixels de lado. O Chrome recusa instalar com ícone menor que 144.
 
 ## Notificações
 
@@ -183,8 +201,8 @@ site. Ela ignora o RLS e dá acesso total ao banco.
 - [x] 8. Agenda *(jornada, pausas, folgas e férias por barbeiro)*
 - [x] 9. Agendamento do cliente *(marcar e cancelar; falta remarcar)*
 - [x] 10. Painel do estabelecimento *(agenda, serviços, equipe, horários; faltam relatórios)*
-- [~] 11. Funcionalidades de gestão *(clientes, relatórios, avaliações, planos, fidelidade, comandas, estoque e comissões; faltam lembretes e promoções)*
-- [~] 12. Aplicativo instalável *(manifesto, service worker e push; falta o ícone por barbearia)*
+- [x] 11. Funcionalidades de gestão *(lembrete automático por horário ainda depende de agendador)*
+- [x] 12. Aplicativo instalável *(manifesto por barbearia montado pelo service worker)*
 - [ ] 13. Testes completos
 - [ ] 14. Pagamentos
 - [ ] 15. Publicação

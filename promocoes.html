@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Promoções — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Promoções</h1>
+    <p class="legenda">Cupons de desconto e quem vale a pena chamar de volta.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="abas">
+    <button class="on" data-aba="cupons" type="button">Cupons</button>
+    <button data-aba="aniversario" type="button">Aniversariantes</button>
+    <button data-aba="sumidos" type="button">Clientes sumidos</button>
+  </div>
+  <div id="painel"></div>
+</template>
+
+<template id="modelo-cupons">
+  <div class="painel" style="max-width:900px">
+    <form id="novo">
+      <div class="form-grid">
+        <div class="campo" style="margin-top:0">
+          <label for="codigo">Código</label>
+          <input id="codigo" type="text" placeholder="VOLTA10" required style="text-transform:uppercase" />
+          <p class="dica">É o que o cliente digita. Sem espaço.</p>
+        </div>
+        <div class="campo" style="margin-top:0">
+          <label for="descricao">Descrição</label>
+          <input id="descricao" type="text" placeholder="10% para quem voltar em outubro" />
+        </div>
+        <div class="campo">
+          <label for="tipo">Tipo de desconto</label>
+          <select id="tipo">
+            <option value="percentual">Percentual (%)</option>
+            <option value="valor">Valor fixo (R$)</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="valor">Quanto</label>
+          <input id="valor" type="text" inputmode="decimal" placeholder="10" required />
+          <p class="dica" id="dica-valor">De 1 a 100.</p>
+        </div>
+        <div class="campo">
+          <label for="minimo">Valor mínimo (R$)</label>
+          <input id="minimo" type="text" inputmode="decimal" placeholder="0,00" />
+          <p class="dica">O cupom só vale acima disso.</p>
+        </div>
+        <div class="campo">
+          <label for="usos-max">Limite total de usos</label>
+          <input id="usos-max" type="number" min="1" placeholder="sem limite" />
+        </div>
+        <div class="campo">
+          <label for="usos-cliente">Usos por cliente</label>
+          <input id="usos-cliente" type="number" min="1" value="1" />
+        </div>
+        <div class="campo">
+          <label for="inicio">Começa</label>
+          <input id="inicio" type="date" />
+        </div>
+        <div class="campo">
+          <label for="fim">Vence</label>
+          <input id="fim" type="date" />
+          <p class="dica">Deixe vazio para não vencer.</p>
+        </div>
+      </div>
+      <div class="aviso" id="aviso" role="status"></div>
+      <div class="acoes"><button class="btn btn-solid" type="submit" id="criar">Criar cupom</button></div>
+    </form>
+  </div>
+  <div id="lista-cupons" style="margin-top:22px"></div>
+</template>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, moeda,
+         paraCentavos, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('promocoes.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+function iniciar() {
+  const painel = document.getElementById('painel');
+  const el = (id) => document.getElementById(id);
+  let aba = 'cupons';
+
+  document.querySelector('.abas').addEventListener('click', (e) => {
+    const botao = e.target.closest('[data-aba]');
+    if (!botao) return;
+    document.querySelectorAll('.abas button').forEach(b => b.classList.remove('on'));
+    botao.classList.add('on');
+    aba = botao.dataset.aba;
+    desenhar();
+  });
+
+  function desenhar() {
+    if (aba === 'cupons') return montarCupons();
+    if (aba === 'aniversario') return montarAniversariantes();
+    return montarSumidos();
+  }
+
+  // ----------------------------------------------------------
+  // Cupons
+  // ----------------------------------------------------------
+  function montarCupons() {
+    painel.innerHTML = '';
+    painel.appendChild(document.getElementById('modelo-cupons').content.cloneNode(true));
+
+    const hoje = new Date();
+    el('inicio').value = hoje.toISOString().slice(0, 10);
+
+    el('tipo').addEventListener('change', () => {
+      el('dica-valor').textContent = el('tipo').value === 'percentual'
+        ? 'De 1 a 100.' : 'Em reais, como 15,00.';
+    });
+
+    el('novo').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const codigo = el('codigo').value.trim().toUpperCase().replace(/\s+/g, '');
+      const tipo = el('tipo').value;
+
+      if (!codigo) return dizer('Informe o código.');
+
+      let valor;
+      if (tipo === 'percentual') {
+        valor = Number(el('valor').value.replace(',', '.'));
+        if (!Number.isFinite(valor) || valor < 1 || valor > 100) {
+          return dizer('O percentual precisa ficar entre 1 e 100.');
+        }
+        valor = Math.round(valor);
+      } else {
+        valor = paraCentavos(el('valor').value);
+        if (valor === null || valor <= 0) return dizer('Valor inválido. Use algo como 15,00.');
+      }
+
+      el('criar').disabled = true;
+      const { error } = await sb.from('cupons').insert({
+        estabelecimento_id: barbearia.id,
+        codigo,
+        descricao: el('descricao').value.trim() || null,
+        tipo,
+        valor,
+        minimo_centavos: el('minimo').value ? (paraCentavos(el('minimo').value) || 0) : 0,
+        usos_max: el('usos-max').value ? Number(el('usos-max').value) : null,
+        usos_por_cliente: Number(el('usos-cliente').value) || 1,
+        inicio: el('inicio').value || new Date().toISOString().slice(0, 10),
+        fim: el('fim').value || null
+      });
+      el('criar').disabled = false;
+
+      if (error) {
+        return dizer(error.code === '23505'
+          ? 'Já existe um cupom com esse código.'
+          : 'Não foi possível criar: ' + error.message);
+      }
+
+      el('novo').reset();
+      el('usos-cliente').value = 1;
+      el('inicio').value = new Date().toISOString().slice(0, 10);
+      dizer('Cupom criado.', 'ok');
+      listarCupons();
+    });
+
+    el('lista-cupons').addEventListener('click', async (e) => {
+      const alternar = e.target.closest('[data-alternar]');
+      const apagar = e.target.closest('[data-apagar]');
+
+      if (alternar) {
+        alternar.disabled = true;
+        await sb.from('cupons').update({ ativo: alternar.dataset.ativo !== 'true' })
+          .eq('id', alternar.dataset.alternar);
+        listarCupons();
+        return;
+      }
+
+      if (apagar) {
+        if (!confirm('Excluir esse cupom? O histórico de quem já usou some junto.')) return;
+        apagar.disabled = true;
+        await sb.from('cupons').delete().eq('id', apagar.dataset.apagar);
+        listarCupons();
+      }
+    });
+
+    listarCupons();
+  }
+
+  const dizer = (t, tipo = 'erro') => {
+    const a = document.getElementById('aviso');
+    if (a) { a.textContent = t; a.className = 'aviso ' + tipo; }
+  };
+
+  async function listarCupons() {
+    const { data, error } = await sb.from('cupons')
+      .select('*, cupom_usos(id)')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('criado_em', { ascending: false });
+
+    const alvo = el('lista-cupons');
+    if (error) { alvo.innerHTML = '<p class="legenda">Erro: ' + escapar(error.message) + '</p>'; return; }
+
+    if (!data.length) {
+      alvo.innerHTML = '<div class="vazio"><b>Nenhum cupom ainda</b>' +
+        '<p>Crie um código e divulgue. O cliente digita na hora de agendar.</p></div>';
+      return;
+    }
+
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    alvo.innerHTML = '<div class="rolagem"><table class="tabela">' +
+      '<thead><tr><th>Código</th><th>Desconto</th><th>Validade</th>' +
+      '<th class="num">Usos</th><th></th></tr></thead><tbody>' +
+      data.map(c => {
+        const usos = (c.cupom_usos || []).length;
+        const vencido = c.fim && c.fim < hoje;
+        const esgotado = c.usos_max && usos >= c.usos_max;
+        const situacao = !c.ativo ? 'desligado' : vencido ? 'vencido' : esgotado ? 'esgotado' : 'valendo';
+
+        return '<tr' + (situacao === 'valendo' ? '' : ' style="opacity:.55"') + '>' +
+          '<td><b>' + escapar(c.codigo) + '</b>' +
+            (c.descricao ? '<span>' + escapar(c.descricao) + '</span>' : '') +
+            '<span class="pill ' + (situacao === 'valendo' ? 'aberta' : '') + '">' + situacao + '</span></td>' +
+          '<td>' + (c.tipo === 'percentual' ? c.valor + '%' : moeda(c.valor)) +
+            (c.minimo_centavos ? '<span>acima de ' + moeda(c.minimo_centavos) + '</span>' : '') + '</td>' +
+          '<td>' + new Date(c.inicio + 'T12:00:00').toLocaleDateString('pt-BR') +
+            (c.fim ? ' a ' + new Date(c.fim + 'T12:00:00').toLocaleDateString('pt-BR') : ' em diante') + '</td>' +
+          '<td class="num">' + usos + (c.usos_max ? ' / ' + c.usos_max : '') +
+            '<span>' + c.usos_por_cliente + 'x por cliente</span></td>' +
+          '<td class="num">' +
+            '<button class="btn btn-outline" data-alternar="' + c.id + '" data-ativo="' + c.ativo + '">' +
+              (c.ativo ? 'Desligar' : 'Ligar') + '</button> ' +
+            '<button class="btn btn-perigo" data-apagar="' + c.id + '">Excluir</button>' +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // ----------------------------------------------------------
+  // Clientes: base comum para aniversário e sumidos
+  // ----------------------------------------------------------
+  async function buscarClientes() {
+    const { data } = await sb.from('agendamentos')
+      .select('inicio, status, cliente_id, cliente_nome, cliente_telefone, perfis(nome, telefone, data_nascimento)')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('inicio', { ascending: false });
+
+    const mapa = new Map();
+    (data || []).forEach(a => {
+      const chave = a.cliente_id ||
+        'avulso:' + (a.cliente_telefone || a.cliente_nome || '').toLowerCase();
+      if (!mapa.has(chave)) {
+        mapa.set(chave, {
+          nome: a.perfis?.nome || a.cliente_nome || 'Cliente',
+          telefone: a.perfis?.telefone || a.cliente_telefone || '',
+          nascimento: a.perfis?.data_nascimento || null,
+          ultimo: new Date(a.inicio),
+          visitas: 0
+        });
+      }
+      const c = mapa.get(chave);
+      if (a.status === 'concluido') c.visitas++;
+      const quando = new Date(a.inicio);
+      if (quando > c.ultimo) c.ultimo = quando;
+    });
+
+    return [...mapa.values()];
+  }
+
+  function linkWhatsapp(telefone, texto) {
+    const numero = String(telefone).replace(/\D/g, '');
+    if (numero.length < 10) return null;
+    const completo = numero.length <= 11 ? '55' + numero : numero;
+    return 'https://wa.me/' + completo + '?text=' + encodeURIComponent(texto);
+  }
+
+  function tabelaPessoas(pessoas, colunaExtra, mensagem) {
+    return '<div class="rolagem"><table class="tabela">' +
+      '<thead><tr><th>Cliente</th><th>' + colunaExtra.titulo + '</th>' +
+      '<th class="num">Visitas</th><th></th></tr></thead><tbody>' +
+      pessoas.map(c => {
+        const link = c.telefone ? linkWhatsapp(c.telefone, mensagem(c)) : null;
+        return '<tr><td><b>' + escapar(c.nome) + '</b>' +
+          '<span>' + (c.telefone ? escapar(c.telefone) : 'sem telefone') + '</span></td>' +
+          '<td>' + colunaExtra.valor(c) + '</td>' +
+          '<td class="num">' + c.visitas + '</td>' +
+          '<td class="num">' + (link
+            ? '<a class="btn btn-solid" href="' + link + '" target="_blank" rel="noopener">WhatsApp</a>'
+            : '<span class="legenda">—</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // ----------------------------------------------------------
+  // Aniversariantes
+  // ----------------------------------------------------------
+  async function montarAniversariantes() {
+    painel.innerHTML = '<p class="carregando">Carregando...</p>';
+    const pessoas = await buscarClientes();
+    const mes = new Date().getMonth() + 1;
+
+    const lista = pessoas
+      .filter(c => c.nascimento && Number(c.nascimento.slice(5, 7)) === mes)
+      .sort((a, b) => Number(a.nascimento.slice(8, 10)) - Number(b.nascimento.slice(8, 10)));
+
+    const nomeMes = new Date().toLocaleDateString('pt-BR', { month: 'long' });
+
+    if (!lista.length) {
+      painel.innerHTML = '<div class="vazio"><b>Nenhum aniversariante em ' + nomeMes + '</b>' +
+        '<p>A data vem do perfil do cliente, e é opcional. Só aparece quem preencheu.</p></div>';
+      return;
+    }
+
+    painel.innerHTML =
+      '<p class="legenda" style="margin-bottom:18px">' + lista.length +
+      (lista.length === 1 ? ' cliente faz' : ' clientes fazem') + ' aniversário em ' + nomeMes +
+      '. Crie um cupom e mande junto com a mensagem.</p>' +
+      tabelaPessoas(lista,
+        { titulo: 'Aniversário', valor: (c) => {
+            const [, m, d] = c.nascimento.split('-');
+            return d + '/' + m;
+          } },
+        (c) => 'Oi, ' + c.nome.split(' ')[0] + '! Aqui é da ' + barbearia.nome +
+               '. Vimos que seu aniversário está chegando e queremos comemorar com você. ' +
+               'Passa aqui que tem presente.');
+  }
+
+  // ----------------------------------------------------------
+  // Sumidos
+  // ----------------------------------------------------------
+  async function montarSumidos() {
+    painel.innerHTML = '<p class="carregando">Carregando...</p>';
+    const pessoas = await buscarClientes();
+    const hoje = new Date();
+
+    const lista = pessoas
+      .map(c => ({ ...c, dias: Math.floor((hoje - c.ultimo) / 86400000) }))
+      .filter(c => c.dias >= 45 && c.visitas > 0)
+      .sort((a, b) => b.visitas - a.visitas || a.dias - b.dias);
+
+    if (!lista.length) {
+      painel.innerHTML = '<div class="vazio"><b>Ninguém sumido</b>' +
+        '<p>Aparecem aqui os clientes que já vieram e estão há mais de 45 dias sem voltar.</p></div>';
+      return;
+    }
+
+    painel.innerHTML =
+      '<p class="legenda" style="margin-bottom:18px">' + lista.length +
+      (lista.length === 1 ? ' cliente está' : ' clientes estão') +
+      ' há mais de 45 dias sem voltar. Os que mais vinham aparecem primeiro.</p>' +
+      tabelaPessoas(lista,
+        { titulo: 'Sem voltar há', valor: (c) => c.dias + ' dias' },
+        (c) => 'Oi, ' + c.nome.split(' ')[0] + '! Aqui é da ' + barbearia.nome +
+               '. Faz um tempo que você não aparece — a cadeira está te esperando. ' +
+               'Quer marcar um horário?');
+  }
+
+  desenhar();
+}
+</script>
+
+</body>
+</html>

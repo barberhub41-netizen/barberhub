@@ -49,6 +49,15 @@
       <div id="horarios"><p class="carregando" style="padding:20px 0">Escolha um dia.</p></div>
     </div>
 
+    <div class="campo">
+      <label for="cupom">5. Cupom de desconto</label>
+      <div class="linha-form" style="grid-template-columns:1fr auto">
+        <input id="cupom" type="text" placeholder="Tem um código? Digite aqui" style="text-transform:uppercase" />
+        <button class="btn btn-outline" type="button" id="aplicar-cupom">Aplicar</button>
+      </div>
+      <div class="aviso" id="cupom-aviso" role="status"></div>
+    </div>
+
     <div class="aviso" id="aviso" role="status"></div>
 
     <div class="acoes">
@@ -117,6 +126,7 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
   document.getElementById('voltar').href = 'barbearia.html?slug=' + encodeURIComponent(barbearia.slug);
 
   let escolhido = null;   // Date do horário selecionado
+  let cupom = null;       // cupom conferido e aceito
   const PASSO = barbearia.intervalo_min || 30;   // definido pela barbearia
 
   const mostrar = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
@@ -158,7 +168,7 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
 
     const linhas = comPlano();
     const cheio = somaPreco();
-    const cobrado = somaCobrada();
+    const cobrado = Math.max(0, somaCobrada() - (cupom?.desconto || 0));
 
     let detalhe = '';
     if (assinatura) {
@@ -174,6 +184,9 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
             moeda(cheio - cobrado) + '</span></div>'
           : '') +
         '</div>';
+    } else if (cupom) {
+      detalhe = '<div class="resumo-plano"><b>Cupom ' + escapar(cupom.codigo) + '</b>' +
+        '<div class="linha-preco"><span>Desconto</span><span>− ' + moeda(cupom.desconto) + '</span></div></div>';
     }
 
     alvo.innerHTML = lista.length + (lista.length === 1 ? ' serviço' : ' serviços') +
@@ -312,6 +325,71 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
   });
 
   // ------------------------------------------------------------
+  // Cupom
+  // ------------------------------------------------------------
+  const avisoCupom = document.getElementById('cupom-aviso');
+  const campoCupom = document.getElementById('cupom');
+
+  document.getElementById('aplicar-cupom').addEventListener('click', async () => {
+    const codigo = campoCupom.value.trim();
+
+    if (!codigo) {
+      cupom = null;
+      avisoCupom.className = 'aviso';
+      atualizarTotal();
+      return;
+    }
+
+    const sessao = await sessaoAtual();
+    if (!sessao) {
+      avisoCupom.textContent = 'Entre na sua conta para usar cupom.';
+      avisoCupom.className = 'aviso erro';
+      return;
+    }
+
+    if (!escolhidos().length) {
+      avisoCupom.textContent = 'Escolha os serviços antes de aplicar o cupom.';
+      avisoCupom.className = 'aviso erro';
+      return;
+    }
+
+    const { data, error } = await sb.rpc('validar_cupom', {
+      p_estab: barbearia.id,
+      p_codigo: codigo,
+      p_total: somaCobrada()
+    });
+
+    if (error) {
+      avisoCupom.textContent = 'Não foi possível conferir: ' + error.message;
+      avisoCupom.className = 'aviso erro';
+      return;
+    }
+
+    if (!data.ok) {
+      cupom = null;
+      avisoCupom.textContent = data.motivo;
+      avisoCupom.className = 'aviso erro';
+      atualizarTotal();
+      return;
+    }
+
+    cupom = data;
+    avisoCupom.textContent = 'Cupom aplicado: menos ' + moeda(data.desconto) +
+      (data.descricao ? ' · ' + data.descricao : '') + '.';
+    avisoCupom.className = 'aviso ok';
+    atualizarTotal();
+  });
+
+  // trocar serviço invalida o desconto já calculado
+  elServico.addEventListener('change', () => {
+    if (cupom) {
+      cupom = null;
+      avisoCupom.textContent = 'Os serviços mudaram. Aplique o cupom de novo.';
+      avisoCupom.className = 'aviso erro';
+    }
+  });
+
+  // ------------------------------------------------------------
   // Confirmação
   // ------------------------------------------------------------
   confirmar.addEventListener('click', async () => {
@@ -346,8 +424,10 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
       cliente_id: sessao.user.id,
       inicio: escolhido.toISOString(),
       fim: fim.toISOString(),
-      valor_centavos: somaCobrada(),
-      assinatura_id: assinatura ? assinatura.id : null
+      valor_centavos: Math.max(0, somaCobrada() - (cupom?.desconto || 0)),
+      assinatura_id: assinatura ? assinatura.id : null,
+      cupom_id: cupom ? cupom.cupom_id : null,
+      desconto_cupom_centavos: cupom ? cupom.desconto : 0
     }).select('id').single();
 
     confirmar.textContent = 'Confirmar agendamento';
@@ -374,6 +454,15 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
         mostrar('Não foi possível registrar os serviços: ' + itens.error.message);
         confirmar.disabled = false;
         return;
+      }
+
+      if (cupom) {
+        await sb.from('cupom_usos').insert({
+          cupom_id: cupom.cupom_id,
+          cliente_id: sessao.user.id,
+          agendamento_id: criado.id,
+          desconto_centavos: cupom.desconto
+        });
       }
     }
 

@@ -131,6 +131,7 @@ export function subnav(atual) {
     ['jornadas.html',        'Horários'],
     ['fotos.html',           'Fotos'],
     ['planos.html',          'Planos'],
+    ['promocoes.html',       'Promoções'],
     ['avaliacoes.html',      'Avaliações'],
     ['clientes.html',        'Clientes'],
     ['relatorios.html',      'Relatórios']
@@ -595,4 +596,61 @@ export function baixarIcs(evento, nomeArquivo = 'agendamento.ics') {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+
+// ============================================================
+// Instalar como aplicativo da barbearia
+// No Android, quem manda é o manifesto — trocado aqui pelo da
+// barbearia aberta. No iPhone, o que vale é o apple-touch-icon.
+// ============================================================
+let convitePendente = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  convitePendente = e;
+  document.dispatchEvent(new CustomEvent('barberhub:instalavel'));
+});
+
+export function podeInstalar() {
+  return !!convitePendente;
+}
+
+export function jaInstalado() {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         window.navigator.standalone === true;
+}
+
+export function ehIphone() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+export async function pedirInstalacao() {
+  if (!convitePendente) return false;
+  convitePendente.prompt();
+  const { outcome } = await convitePendente.userChoice;
+  convitePendente = null;
+  return outcome === 'accepted';
+}
+
+// Aponta o manifesto e o ícone do iPhone para esta barbearia.
+export function manifestoDaBarbearia({ slug, nome, icone }) {
+  const p = new URLSearchParams({ slug: slug || '', nome: nome || 'BarberHub' });
+  if (icone) p.set('icone', icone);
+
+  let link = document.querySelector('link[rel="manifest"]');
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'manifest';
+    document.head.appendChild(link);
+  }
+  link.href = 'manifest.json?' + p.toString();
+
+  if (icone) {
+    document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(l => l.remove());
+    const ios = document.createElement('link');
+    ios.rel = 'apple-touch-icon';
+    ios.href = icone;
+    document.head.appendChild(ios);
+  }
 }

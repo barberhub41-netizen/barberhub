@@ -24,7 +24,8 @@
 
 <script type="module">
 import { sb, montarTopo, moeda, duracao, escapar, urlImagem, estrelas, sessaoAtual, PERIODOS,
-         mostrarDistancia, distanciaKm, ondeEstou } from './app.js';
+         mostrarDistancia, distanciaKm, ondeEstou,
+         manifestoDaBarbearia, podeInstalar, pedirInstalacao, jaInstalado, ehIphone } from './app.js';
 
 montarTopo('buscar');
 
@@ -88,7 +89,7 @@ if (!slug) {
 } else {
   const { data: b, error } = await sb
     .from('estabelecimentos')
-    .select('id, nome, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf, logo_caminho, matriz_id, nota_media, nota_qtd, latitude, longitude')
+    .select('id, nome, slug, descricao, telefone, cep, logradouro, numero, bairro, cidade, uf, logo_caminho, matriz_id, nota_media, nota_qtd, latitude, longitude')
     .eq('slug', slug)
     .maybeSingle();
 
@@ -103,6 +104,13 @@ if (!slug) {
 
 async function montarPerfil(b) {
   document.title = b.nome + ' — BarberHub';
+
+  // o app instalado a partir daqui leva o nome e a logo desta barbearia
+  manifestoDaBarbearia({
+    slug: b.slug || slug,
+    nome: b.nome,
+    icone: b.logo_caminho ? urlImagem(b.logo_caminho) : null
+  });
 
   const raiz = b.matriz_id || b.id;
   const [servicos, equipe, fotos, unidades, avaliacoes, planos, fidelidade] = await Promise.all([
@@ -190,6 +198,7 @@ async function montarPerfil(b) {
       '<section><h2 class="secao-titulo">Serviços</h2>' + listaServicos + '</section>' +
       '<section><h2 class="secao-titulo">Equipe</h2>' + listaEquipe + '</section>' +
     '</div>' +
+    '<div id="instalar-app"></div>' +
     ((planos.data || []).length
       ? '<h2 class="secao-titulo" style="margin-top:44px">Planos</h2><div class="planos">' +
         planos.data.map(p =>
