@@ -90,11 +90,12 @@ if (!slug) {
   if (!b) {
     erro('Essa barbearia não está mais no catálogo.');
   } else {
-    const [servicos, equipe] = await Promise.all([
+    const [servicos, equipe, ajustes] = await Promise.all([
       sb.from('servicos').select('id, nome, preco_centavos, duracao_min')
         .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome'),
       sb.from('barbeiros').select('id, nome')
-        .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome')
+        .eq('estabelecimento_id', b.id).eq('ativo', true).order('nome'),
+      sb.from('barbeiro_servicos').select('barbeiro_id, servico_id, duracao_min, atende')
     ]);
 
     if (!servicos.data?.length || !equipe.data?.length) {
@@ -107,12 +108,12 @@ if (!slug) {
 
       conteudo.innerHTML = '';
       conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
-      iniciar(b, servicos.data, equipe.data, assinatura);
+      iniciar(b, servicos.data, equipe.data, assinatura, ajustes.data || []);
     }
   }
 }
 
-function iniciar(barbearia, servicos, equipe, assinatura) {
+function iniciar(barbearia, servicos, equipe, assinatura, ajustes) {
   const elServico = document.getElementById('servico');
   const elProf    = document.getElementById('profissional');
   const elData    = document.getElementById('data');
@@ -131,14 +132,47 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
 
   const mostrar = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
 
-  elServico.innerHTML = servicos.map(s =>
-    '<label class="escolha"><input type="checkbox" value="' + s.id + '" />' +
-    '<span><b>' + escapar(s.nome) + '</b>' +
-    '<small>' + duracao(s.duracao_min) + ' · ' + moeda(s.preco_centavos) + '</small></span></label>').join('');
+  // o ajuste daquele profissional naquele serviço, se houver
+  function ajusteDe(servicoId, barbeiroId) {
+    return ajustes.find(a => a.servico_id === servicoId && a.barbeiro_id === barbeiroId);
+  }
 
-  // o primeiro já vem marcado, para a tela não abrir vazia
-  const primeiro = elServico.querySelector('input');
-  if (primeiro) primeiro.checked = true;
+  function atende(servicoId, barbeiroId) {
+    const a = ajusteDe(servicoId, barbeiroId);
+    return a ? a.atende : true;
+  }
+
+  // quanto tempo ESSE profissional leva nesse serviço
+  function tempoDe(servico, barbeiroId) {
+    const a = ajusteDe(servico.id, barbeiroId);
+    return a?.duracao_min ?? servico.duracao_min;
+  }
+
+  function montarServicos() {
+    const barbeiro = elProf.value;
+    const marcados = new Set(
+      [...elServico.querySelectorAll('input:checked')].map(i => i.value)
+    );
+
+    const disponiveis = servicos.filter(s => atende(s.id, barbeiro));
+
+    if (!disponiveis.length) {
+      elServico.innerHTML = '<p class="legenda">Esse profissional não atende nenhum serviço cadastrado.</p>';
+      return;
+    }
+
+    elServico.innerHTML = disponiveis.map(s =>
+      '<label class="escolha"><input type="checkbox" value="' + s.id + '"' +
+      (marcados.has(s.id) ? ' checked' : '') + ' />' +
+      '<span><b>' + escapar(s.nome) + '</b>' +
+      '<small>' + duracao(tempoDe(s, barbeiro)) + ' · ' + moeda(s.preco_centavos) + '</small></span></label>').join('');
+
+    // nada marcado ainda? marca o primeiro, para a tela não abrir vazia
+    if (!elServico.querySelector('input:checked')) {
+      const primeiro = elServico.querySelector('input');
+      if (primeiro) primeiro.checked = true;
+    }
+  }
 
   function escolhidos() {
     return [...elServico.querySelectorAll('input:checked')]
@@ -146,7 +180,7 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
       .filter(Boolean);
   }
 
-  const somaDuracao = () => escolhidos().reduce((t, s) => t + s.duracao_min, 0);
+  const somaDuracao = () => escolhidos().reduce((t, s) => t + tempoDe(s, elProf.value), 0);
   const somaPreco   = () => escolhidos().reduce((t, s) => t + s.preco_centavos, 0);
 
   function comPlano() {
@@ -200,6 +234,9 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
   elProf.innerHTML = equipe.map(p =>
     '<option value="' + p.id + '">' + escapar(p.nome) + '</option>').join('');
 
+  // agora que há um profissional selecionado, a lista sai com o tempo dele
+  montarServicos();
+
   // limites do campo de data
   const hoje = new Date();
   const limite = new Date(hoje.getTime() + DIAS_A_FRENTE * 86400000);
@@ -224,7 +261,10 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
             i.checked = g.servicos.includes(i.value);
           });
         }
-        if (equipe.some(p => p.id === g.profissional)) elProf.value = g.profissional;
+        if (equipe.some(p => p.id === g.profissional)) {
+          elProf.value = g.profissional;
+          montarServicos();
+        }
         if (g.data >= elData.min) elData.value = g.data;
       }
     } catch (e) { /* ignora */ }
@@ -444,7 +484,7 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
           preco_cobrado_centavos: l.preco,
           coberto: l.coberto,
           desconto_pct: l.desconto,
-          duracao_min: l.servico.duracao_min,
+          duracao_min: tempoDe(l.servico, elProf.value),
           ordem: i
         }))
       );
@@ -481,7 +521,7 @@ function iniciar(barbearia, servicos, equipe, assinatura) {
 
   elServico.addEventListener('change', calcular);
   atualizarTotal();
-  elProf.addEventListener('change', calcular);
+  elProf.addEventListener('change', () => { montarServicos(); calcular(); });
   elData.addEventListener('change', calcular);
   calcular();
 }

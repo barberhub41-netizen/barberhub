@@ -1,4 +1,7 @@
 :root{
+  /* avisa o navegador que a página é escura: menus, calendários e
+     barras de rolagem nativos passam a ser desenhados no tema certo */
+  color-scheme: dark;
   --bg:#141413;
   --bg-deep:#0f0f0e;
   --bg-soft:#1b1a18;
@@ -524,3 +527,13 @@ input[type=file]::file-selector-button{background:var(--orange);color:#161513;bo
 .caminho-texto small{display:block;color:var(--muted);font-size:13.5px;margin-top:4px;line-height:1.55}
 .caminho-seta{color:var(--dim);font-size:20px;flex-shrink:0}
 .caminho:hover .caminho-seta{color:var(--orange)}
+
+/* ============================================================
+   Menus nativos
+   As opções de um <select> são desenhadas pelo sistema, não pela
+   página. Sem isto elas saem brancas no fundo branco.
+   ============================================================ */
+select{color-scheme:dark}
+select option{background:var(--panel);color:var(--text)}
+select option:checked,select option:hover{background:var(--orange);color:#161513}
+input[type=date],input[type=time],input[type=datetime-local]{color-scheme:dark}

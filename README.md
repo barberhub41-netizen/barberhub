@@ -59,6 +59,7 @@ sql/migracao-12-acesso-barbeiro.sql  login do profissional
 sql/migracao-13-cpf.sql        CPF obrigatório, um por conta
 sql/migracao-14-google-cpf.sql  dados do Google e login por CPF
 sql/migracao-15-proteger-cpf.sql  fecha a leitura do CPF por coluna
+sql/migracao-16-tempo-por-barbeiro.sql  tempo e serviços por profissional
 sw.js                          service worker: push e cache básico
 manifest.json                  torna o site instalável
 supabase/functions/enviar-push/index.ts     Edge Function que entrega o push
@@ -115,6 +116,7 @@ Todos podem ser executados mais de uma vez sem duplicar nada.
 | `perfis` | nome, telefone e papel de cada usuário |
 | `estabelecimentos` | dados da barbearia e o status no catálogo |
 | `barbeiros` | equipe de cada estabelecimento |
+| `barbeiro_servicos` | o que cada profissional faz, e em quanto tempo |
 | `servicos` | nome, preço em centavos e duração |
 | `jornadas` | horário de trabalho por barbeiro e dia da semana |
 | `agendamentos` | quem, com quem, quando e em que status |

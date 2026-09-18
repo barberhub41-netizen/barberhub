@@ -84,7 +84,7 @@
 import { sb, mascaraCpf, cpfValido, soDigitos, apelido, montarTopo } from './app.js';
 import { traduzErro } from './config.js';
 
-montarTopo('estabelecimento');
+montarTopo('estabelecimento', { contexto: 'estabelecimento' });
 
 const el = (id) => document.getElementById(id);
 const aviso = el('aviso');
@@ -101,7 +101,7 @@ const soltar = (t) => {
 
 // já logado? vai direto para o painel
 const { data: { session } } = await sb.auth.getSession();
-if (session) location.replace('estabelecimento.html');
+if (session) location.replace('agenda.html');
 
 el('form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -164,7 +164,7 @@ el('form').addEventListener('submit', async (e) => {
                   '. Entre e cadastre pelo painel.');
   }
 
-  location.href = 'estabelecimento.html';
+  location.href = 'agenda.html';
 });
 </script>
 

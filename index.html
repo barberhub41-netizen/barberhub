@@ -82,42 +82,11 @@
     <div class="wrap">
       <div class="head">
         <h2>Empresas próximas</h2>
-        <p>Assim os estabelecimentos aparecem na busca: nota, endereço e distância de onde você está.</p>
+        <p>As barbearias que já estão no catálogo. Ative a localização para ver as mais perto.</p>
         <div class="rule"></div>
       </div>
-      <div class="cards">
-        <a class="card" href="buscar.html">
-          <span class="avatar"><svg><use href="#i-scissors"/></svg><span class="badge">★ 5.0</span></span>
-          <span class="card-txt"><b>Barbearia exemplo</b><span>Rua das Palmeiras, 120 — Centro</span><em><svg><use href="#i-pin"/></svg>1,07 km</em></span>
-          <span class="next"><svg><use href="#i-next"/></svg></span>
-        </a>
-        <a class="card" href="buscar.html">
-          <span class="avatar"><svg><use href="#i-scissors"/></svg><span class="badge">★ 4.8</span></span>
-          <span class="card-txt"><b>Estúdio exemplo</b><span>Av. Brasil, 980 — Água Verde</span><em><svg><use href="#i-pin"/></svg>1,29 km</em></span>
-          <span class="next"><svg><use href="#i-next"/></svg></span>
-        </a>
-        <a class="card" href="buscar.html">
-          <span class="avatar"><svg><use href="#i-scissors"/></svg><span class="badge">★ 4.9</span></span>
-          <span class="card-txt"><b>Barber club exemplo</b><span>Rua Sete de Abril, 54 — Portão</span><em><svg><use href="#i-pin"/></svg>2,32 km</em></span>
-          <span class="next"><svg><use href="#i-next"/></svg></span>
-        </a>
-        <a class="card" href="buscar.html?cidade=S%C3%A3o%20Paulo">
-          <span class="avatar"><svg><use href="#i-pin"/></svg></span>
-          <span class="card-txt"><b>São Paulo</b><span>Ver estabelecimentos disponíveis</span></span>
-          <span class="next"><svg><use href="#i-next"/></svg></span>
-        </a>
-        <a class="card" href="buscar.html?cidade=Curitiba">
-          <span class="avatar"><svg><use href="#i-pin"/></svg></span>
-          <span class="card-txt"><b>Curitiba</b><span>Ver estabelecimentos disponíveis</span></span>
-          <span class="next"><svg><use href="#i-next"/></svg></span>
-        </a>
-        <a class="card" href="buscar.html?cidade=Rio%20de%20Janeiro">
-          <span class="avatar"><svg><use href="#i-pin"/></svg></span>
-          <span class="card-txt"><b>Rio de Janeiro</b><span>Ver estabelecimentos disponíveis</span></span>
-          <span class="next"><svg><use href="#i-next"/></svg></span>
-        </a>
-      </div>
-      <p class="note">Os três primeiros cards são ilustrativos. A lista real será carregada quando o cadastro de estabelecimentos estiver ligado.</p>
+      <div class="cards" id="proximas"><p class="carregando" style="grid-column:1/-1">Carregando barbearias...</p></div>
+      <p class="note" id="nota-proximas"></p>
     </div>
   </section>
 
@@ -202,13 +171,13 @@
       <div class="shop">
         <div class="shop-cover"><span class="shop-logo"><svg><use href="#i-scissors"/></svg></span></div>
         <div class="shop-body">
-          <h3>Barbearia exemplo</h3>
-          <p>Rua das Palmeiras, 120 — Centro · Aberto até 20h</p>
-          <div class="row"><b>Corte social</b><span>30 min · R$ 45</span></div>
-          <div class="row"><b>Corte + barba</b><span>50 min · R$ 70</span></div>
-          <div class="row"><b>Barba terapia</b><span>40 min · R$ 55</span></div>
-          <div class="row"><b>Plano mensal</b><span>4 cortes · R$ 150</span></div>
-          <a class="btn btn-solid" href="buscar.html">Abrir perfil</a>
+          <h3>Como é o perfil</h3>
+          <p>Cada barbearia monta o seu, com o que ela mesma cadastra.</p>
+          <div class="row"><b>Serviços</b><span>preço e duração</span></div>
+          <div class="row"><b>Equipe</b><span>agenda por profissional</span></div>
+          <div class="row"><b>Fotos e endereço</b><span>com distância de você</span></div>
+          <div class="row"><b>Avaliações</b><span>de quem já foi atendido</span></div>
+          <a class="btn btn-solid" href="buscar.html">Ver barbearias</a>
         </div>
       </div>
     </div>
@@ -294,6 +263,58 @@
     area.innerHTML =
       '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>' +
       '<a class="btn btn-solid btn-sm" href="perfil.html">' + nome + '</a>';
+  }
+
+  // ----------------------------------------------------------
+  // Barbearias do catálogo, na tela inicial
+  // ----------------------------------------------------------
+  const { escapar, urlImagem, ondeEstou, distanciaKm, mostrarDistancia } = await import('./app.js');
+
+  const caixa = document.getElementById('proximas');
+  const nota = document.getElementById('nota-proximas');
+
+  const { data: casas } = await sb.from('estabelecimentos')
+    .select('id, nome, slug, bairro, cidade, uf, logradouro, numero, logo_caminho, nota_media, nota_qtd, latitude, longitude')
+    .eq('status', 'disponivel')
+    .order('nota_media', { ascending: false, nullsFirst: false })
+    .limit(6);
+
+  if (!casas || !casas.length) {
+    caixa.innerHTML =
+      '<div class="vazio" style="grid-column:1/-1">' +
+      '<b>Nenhuma barbearia no catálogo ainda</b>' +
+      '<p>Assim que a primeira concluir o cadastro, ela aparece aqui.</p>' +
+      '<a class="btn btn-outline" href="cadastro-estabelecimento.html">Cadastrar minha barbearia</a></div>';
+    nota.textContent = '';
+  } else {
+    // distância, quando a pessoa permitir
+    const aqui = await ondeEstou(4000);
+    if (aqui) {
+      casas.forEach(c => {
+        c._km = distanciaKm(aqui.lat, aqui.lon, c.latitude, c.longitude);
+      });
+      casas.sort((a, b) => (a._km ?? 1e9) - (b._km ?? 1e9));
+    }
+
+    caixa.innerHTML = casas.map(c => {
+      const endereco = [c.logradouro, c.numero].filter(Boolean).join(', ');
+      const local = [c.bairro, c.cidade].filter(Boolean).join(' — ');
+      return '<a class="card" href="barbearia.html?slug=' + encodeURIComponent(c.slug) + '">' +
+        '<span class="avatar">' +
+        (c.logo_caminho
+          ? '<img src="' + urlImagem(c.logo_caminho) + '" alt="" loading="lazy" />'
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>') +
+        (c.nota_qtd ? '<span class="badge">★ ' + Number(c.nota_media).toFixed(1).replace('.', ',') + '</span>' : '') +
+        '</span>' +
+        '<span class="card-txt"><b>' + escapar(c.nome) + '</b>' +
+        '<span>' + escapar(endereco || local) + '</span>' +
+        (endereco && local ? '<span>' + escapar(local) + '</span>' : '') +
+        (c._km != null ? '<em class="distancia">' + mostrarDistancia(c._km) + '</em>' : '') +
+        '</span>' +
+        '<span class="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></span></a>';
+    }).join('');
+
+    nota.innerHTML = '<a href="buscar.html" style="color:var(--orange)">Ver todas as barbearias →</a>';
   }
 </script>
 </body>

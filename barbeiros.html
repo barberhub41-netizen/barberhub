@@ -25,6 +25,27 @@
   </div>
 </main>
 
+<div class="janela" id="janela-servicos" hidden>
+  <div class="janela-caixa" style="width:min(560px,100%)">
+    <button class="fechar" id="s-fechar" aria-label="Fechar">×</button>
+    <h2>Serviços do profissional</h2>
+    <p class="legenda" id="s-quem"></p>
+
+    <p class="legenda" style="margin:16px 0 12px;font-size:13px">
+      Desmarque o que ele não faz. No tempo, deixe vazio para usar a duração
+      padrão do serviço, ou escreva quantos minutos ele leva.
+    </p>
+
+    <div id="s-lista"></div>
+
+    <div class="aviso" id="s-aviso" role="status"></div>
+    <div class="acoes">
+      <button class="btn btn-solid" id="s-salvar">Salvar</button>
+      <button class="btn btn-outline" id="s-cancelar">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div class="janela" id="janela-acesso" hidden>
   <div class="janela-caixa">
     <button class="fechar" id="a-fechar" aria-label="Fechar">×</button>
@@ -126,6 +147,7 @@ function iniciar() {
         Number(b.comissao_produtos_pct) + '% em produtos' +
         (b.perfil_id ? ' · acesso liberado' + (b.email ? ' (' + escapar(b.email) + ')' : '') : ' · sem acesso') +
         '</span></div>' +
+        '<button class="btn btn-outline" data-servicos="' + b.id + '" data-nomesrv="' + escapar(b.nome) + '">Serviços</button>' +
         '<button class="btn btn-outline" data-comissao="' + b.id + '">Comissão</button>' +
         (b.perfil_id
           ? '<button class="btn btn-outline" data-tirar="' + b.id + '">Tirar acesso</button>'
@@ -158,6 +180,12 @@ function iniciar() {
   });
 
   lista.addEventListener('click', async (e) => {
+    const servicos = e.target.closest('[data-servicos]');
+    if (servicos) {
+      abrirServicos(servicos.dataset.servicos, servicos.dataset.nomesrv);
+      return;
+    }
+
     const acesso = e.target.closest('[data-acesso]');
     if (acesso) {
       abrirAcesso(acesso.dataset.acesso, acesso.dataset.nome);
@@ -226,6 +254,107 @@ function iniciar() {
       carregar();
     }
   });
+
+  // ----------------------------------------------------------
+  // Serviços e tempo por profissional
+  // ----------------------------------------------------------
+  const janelaSrv = document.getElementById('janela-servicos');
+  const sAviso = document.getElementById('s-aviso');
+  let alvoSrv = null;
+  let servicosDaCasa = [];
+
+  async function abrirServicos(id, nome) {
+    alvoSrv = id;
+    sAviso.className = 'aviso';
+    document.getElementById('s-quem').textContent = nome;
+    document.getElementById('s-lista').innerHTML = '<p class="carregando">Carregando...</p>';
+    janelaSrv.hidden = false;
+
+    const [srv, ajustes] = await Promise.all([
+      sb.from('servicos').select('id, nome, duracao_min, preco_centavos')
+        .eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome'),
+      sb.from('barbeiro_servicos').select('servico_id, duracao_min, atende')
+        .eq('barbeiro_id', id)
+    ]);
+
+    servicosDaCasa = srv.data || [];
+    const mapa = new Map((ajustes.data || []).map(a => [a.servico_id, a]));
+
+    if (!servicosDaCasa.length) {
+      document.getElementById('s-lista').innerHTML =
+        '<p class="legenda">Nenhum serviço cadastrado ainda. ' +
+        '<a href="servicos.html" style="color:var(--orange)">Cadastrar serviços</a></p>';
+      return;
+    }
+
+    document.getElementById('s-lista').innerHTML = servicosDaCasa.map(sv => {
+      const a = mapa.get(sv.id);
+      const atende = a ? a.atende : true;
+      const tempo = a?.duracao_min ?? '';
+      return '<div class="item-plano' + (atende ? ' ligado' : '') + '" data-servico="' + sv.id + '">' +
+        '<label class="escolha" style="flex:1;min-width:170px">' +
+          '<input type="checkbox" data-atende ' + (atende ? 'checked' : '') + ' />' +
+          '<span><b>' + escapar(sv.nome) + '</b>' +
+          '<small>padrão: ' + sv.duracao_min + ' min</small></span>' +
+        '</label>' +
+        '<div class="campo" style="margin:0;width:130px">' +
+          '<label>Tempo dele</label>' +
+          '<input type="number" min="5" max="600" step="5" placeholder="' + sv.duracao_min + '" ' +
+            'value="' + tempo + '" data-tempo ' + (atende ? '' : 'disabled') + ' />' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('s-lista').addEventListener('change', (e) => {
+      const marca = e.target.closest('[data-atende]');
+      if (!marca) return;
+      const linha = marca.closest('.item-plano');
+      linha.querySelector('[data-tempo]').disabled = !marca.checked;
+      linha.classList.toggle('ligado', marca.checked);
+    });
+  }
+
+  document.getElementById('s-salvar').addEventListener('click', async () => {
+    if (!alvoSrv) return;
+    const botao = document.getElementById('s-salvar');
+    botao.disabled = true;
+
+    const linhas = [...document.querySelectorAll('#s-lista .item-plano')].map(l => {
+      const atende = l.querySelector('[data-atende]').checked;
+      const tempo = l.querySelector('[data-tempo]').value;
+      return {
+        barbeiro_id: alvoSrv,
+        servico_id: l.dataset.servico,
+        atende,
+        duracao_min: atende && tempo ? Number(tempo) : null
+      };
+    });
+
+    // regrava tudo: mais simples que decidir o que mudou
+    await sb.from('barbeiro_servicos').delete().eq('barbeiro_id', alvoSrv);
+
+    // só guarda o que foge do padrão
+    const relevantes = linhas.filter(l => !l.atende || l.duracao_min != null);
+    const { error } = relevantes.length
+      ? await sb.from('barbeiro_servicos').insert(relevantes)
+      : { error: null };
+
+    botao.disabled = false;
+
+    if (error) {
+      sAviso.textContent = 'Não foi possível salvar: ' + error.message;
+      sAviso.className = 'aviso erro';
+      return;
+    }
+
+    janelaSrv.hidden = true;
+    alvoSrv = null;
+  });
+
+  const fecharSrv = () => { janelaSrv.hidden = true; alvoSrv = null; };
+  document.getElementById('s-fechar').addEventListener('click', fecharSrv);
+  document.getElementById('s-cancelar').addEventListener('click', fecharSrv);
+  janelaSrv.addEventListener('click', (e) => { if (e.target === janelaSrv) fecharSrv(); });
 
   // ----------------------------------------------------------
   // Criar acesso do profissional

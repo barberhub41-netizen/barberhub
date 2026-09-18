@@ -59,7 +59,7 @@ export function fotoDoPerfil(perfil) {
 // ------------------------------------------------------------
 const TESOURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>';
 
-export async function montarTopo(atual = '') {
+export async function montarTopo(atual = '', opcoes = {}) {
   const topo = document.getElementById('topo');
   if (!topo) return;
 
@@ -73,11 +73,13 @@ export async function montarTopo(atual = '') {
     const perfil = await meuPerfil(sessao);
 
     // dono de estabelecimento? barbeiro? cliente comum?
-    const { count } = await sb.from('estabelecimentos')
-      .select('id', { count: 'exact', head: true })
-      .eq('dono_id', sessao.user.id);
+    const { data: minha } = await sb.from('estabelecimentos')
+      .select('id')
+      .eq('dono_id', sessao.user.id)
+      .limit(1);
 
-    meuPapel = count ? 'dono' : (perfil?.papel === 'barbeiro' ? 'barbeiro' : 'cliente');
+    meuPapel = (minha && minha.length) ? 'dono'
+             : (perfil?.papel === 'barbeiro' ? 'barbeiro' : 'cliente');
     const nome = (perfil?.nome || sessao.user.email).split(' ')[0];
     direita =
       '<button class="sino" id="sino" aria-label="Avisos">' +
@@ -90,11 +92,22 @@ export async function montarTopo(atual = '') {
         ? '<a class="btn btn-outline btn-sm" href="minha-agenda.html">Minha agenda</a>'
         : '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>') +
       '<a class="btn btn-solid btn-sm" href="perfil.html">' + escapar(nome) + '</a>';
+  } else if (opcoes.contexto === 'estabelecimento') {
+    // área de quem tem barbearia: o convite é cadastrar o estabelecimento
+    direita =
+      '<a class="btn btn-outline btn-sm" href="entrar.html">Entrar</a>' +
+      '<a class="btn btn-solid btn-sm" href="cadastro-estabelecimento.html">Criar estabelecimento</a>';
   } else {
     direita =
       '<a class="btn btn-outline btn-sm" href="entrar.html">Entrar</a>' +
       '<a class="btn btn-solid btn-sm" href="criar-conta.html">Criar conta</a>';
   }
+
+  // na área do estabelecimento não faz sentido oferecer o catálogo
+  const menu = (opcoes.contexto === 'estabelecimento' && meuPapel === 'visitante')
+    ? '<a href="para-estabelecimentos.html"' + marca('estabelecimento') + '>Como funciona</a>' +
+      '<a href="index.html">Sou cliente</a>'
+    : null;
 
   // o segundo item do menu muda conforme o papel
   const segundoItem =
@@ -108,8 +121,7 @@ export async function montarTopo(atual = '') {
       '<a class="logo" href="index.html"><span class="logo-mark">' + TESOURA + '</span>' +
       '<span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span></a>' +
       '<nav class="menu">' +
-        '<a href="buscar.html"' + marca('buscar') + '>Barbearias</a>' +
-        segundoItem +
+        (menu || ('<a href="buscar.html"' + marca('buscar') + '>Barbearias</a>' + segundoItem)) +
       '</nav>' +
       '<div class="top-cta">' + direita + '</div>' +
     '</div>';

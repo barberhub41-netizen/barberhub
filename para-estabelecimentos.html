@@ -147,18 +147,17 @@
         <p class="foot-about">Plataforma de agendamento para barbearias e seus clientes.</p>
       </div>
       <div>
-        <h4>Cliente</h4>
+        <h4>Estabelecimento</h4>
         <ul>
-          <li><a href="buscar.html">Buscar barbearia</a></li>
-          <li><a href="meus-agendamentos.html">Meus agendamentos</a></li>
-          <li><a href="criar-conta.html">Criar conta</a></li>
+          <li><a href="cadastro-estabelecimento.html">Criar estabelecimento</a></li>
+          <li><a href="entrar.html">Entrar no painel</a></li>
         </ul>
       </div>
       <div>
-        <h4>Estabelecimento</h4>
+        <h4>Sou cliente</h4>
         <ul>
-          <li><a href="para-estabelecimentos.html">Vantagens</a></li>
-          <li><a href="cadastro-estabelecimento.html">Cadastrar barbearia</a></li>
+          <li><a href="index.html">Área do cliente</a></li>
+          <li><a href="buscar.html">Buscar barbearia</a></li>
         </ul>
       </div>
       <div>
@@ -178,7 +177,7 @@
 
 <script type="module">
 import { montarTopo } from './app.js';
-montarTopo('estabelecimento');
+montarTopo('estabelecimento', { contexto: 'estabelecimento' });
 </script>
 
 </body>
