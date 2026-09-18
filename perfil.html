@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Meu perfil — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -62,6 +65,18 @@
       </form>
     </div>
 
+    <h2 class="secao-titulo" style="margin-top:48px">Notificações</h2>
+    <div class="painel" style="max-width:640px">
+      <div class="enviar" style="align-items:flex-start">
+        <div style="flex:1;min-width:240px">
+          <b style="display:block;font-size:16px;font-weight:600">Avisos no celular</b>
+          <p class="legenda" style="margin-top:6px" id="push-estado">Conferindo...</p>
+        </div>
+        <button class="btn btn-solid" id="push-botao" style="display:none">Ativar</button>
+      </div>
+      <div class="aviso" id="push-aviso" role="status"></div>
+    </div>
+
     <h2 class="secao-titulo" style="margin-top:48px">Barbearias favoritas</h2>
     <div id="favoritas"><p class="carregando">Carregando...</p></div>
 
@@ -73,7 +88,8 @@
 
 <script type="module">
 import { sb, montarTopo, exigirLogin, escapar,
-         BUCKET_PERFIS, urlAvatar, urlImagem, conferirImagem, extensaoDe } from './app.js';
+         BUCKET_PERFIS, urlAvatar, urlImagem, conferirImagem, extensaoDe,
+         estadoPush, ativarPush, desativarPush } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('');
@@ -211,6 +227,58 @@ document.getElementById('sair-conta').addEventListener('click', async () => {
   await sb.auth.signOut();
   location.href = 'index.html';
 });
+
+// ------------------------------------------------------------
+// Push
+// ------------------------------------------------------------
+const botaoPush = el('push-botao');
+const textoPush = el('push-estado');
+
+const TEXTOS = {
+  indisponivel: 'Este navegador não aceita notificações. No iPhone, só funciona depois de adicionar o BarberHub à tela de início pelo Safari.',
+  bloqueado: 'As notificações estão bloqueadas nas permissões deste site. Libere no cadeado da barra de endereço e recarregue.',
+  desligado: 'Receba um aviso quando a barbearia confirmar ou cancelar seu horário, e um lembrete antes do atendimento.',
+  ligado: 'Ligadas neste aparelho. Você pode desligar quando quiser.'
+};
+
+async function pintarPush() {
+  const estado = await estadoPush();
+  textoPush.textContent = TEXTOS[estado];
+
+  if (estado === 'ligado' || estado === 'desligado') {
+    botaoPush.style.display = '';
+    botaoPush.textContent = estado === 'ligado' ? 'Desligar' : 'Ativar';
+    botaoPush.className = estado === 'ligado' ? 'btn btn-outline' : 'btn btn-solid';
+    botaoPush.dataset.estado = estado;
+  } else {
+    botaoPush.style.display = 'none';
+  }
+}
+
+botaoPush.addEventListener('click', async () => {
+  botaoPush.disabled = true;
+  el('push-aviso').className = 'aviso';
+
+  try {
+    if (botaoPush.dataset.estado === 'ligado') {
+      await desativarPush();
+      el('push-aviso').textContent = 'Notificações desligadas neste aparelho.';
+      el('push-aviso').className = 'aviso ok';
+    } else {
+      await ativarPush(sessao);
+      el('push-aviso').textContent = 'Pronto. Os avisos chegam neste aparelho.';
+      el('push-aviso').className = 'aviso ok';
+    }
+  } catch (e) {
+    el('push-aviso').textContent = e.message;
+    el('push-aviso').className = 'aviso erro';
+  }
+
+  botaoPush.disabled = false;
+  pintarPush();
+});
+
+pintarPush();
 
 carregarFavoritas();
 </script>

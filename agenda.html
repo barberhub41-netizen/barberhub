@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Agenda — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -443,6 +446,19 @@ function iniciar(equipe, servicos) {
   }
 
   function abrirEdicao(a) {
+    // atalho para faturar o atendimento
+    const rodape = document.querySelector('#janela .acoes');
+    const antigo = document.getElementById('ir-comanda');
+    if (antigo) antigo.remove();
+    if (['concluido', 'confirmado'].includes(a.status)) {
+      const botao = document.createElement('a');
+      botao.id = 'ir-comanda';
+      botao.className = 'btn btn-outline';
+      botao.href = 'comandas.html?agendamento=' + a.id;
+      botao.textContent = 'Abrir comanda';
+      rodape.appendChild(botao);
+    }
+
     editando = a.id;
     const i = new Date(a.inicio), f = new Date(a.fim);
     jTitulo.textContent = a.perfis?.nome || a.cliente_nome || 'Atendimento';

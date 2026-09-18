@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BarberHub — Encontre e agende na barbearia certa</title>
 <meta name="description" content="Compare barbearias, veja serviços e preços, escolha o profissional e agende seu horário." />
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -289,12 +292,8 @@
     const perfil = await meuPerfil(sessao);
     const nome = (perfil?.nome || sessao.user.email).split(' ')[0];
     area.innerHTML =
-      '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Meus agendamentos</a>' +
-      '<button class="btn btn-solid btn-sm" id="sair">Sair, ' + nome + '</button>';
-    document.getElementById('sair').addEventListener('click', async () => {
-      await sb.auth.signOut();
-      location.reload();
-    });
+      '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>' +
+      '<a class="btn btn-solid btn-sm" href="perfil.html">' + nome + '</a>';
   }
 </script>
 </body>

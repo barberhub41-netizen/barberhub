@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Equipe — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -25,10 +28,18 @@
 <template id="modelo">
   <div class="painel" style="max-width:860px">
     <form id="novo">
-      <div class="linha-form" style="grid-template-columns:1fr auto">
+      <div class="linha-form" style="grid-template-columns:2fr 1fr 1fr auto">
         <div class="campo">
           <label for="nome">Nome do profissional</label>
           <input id="nome" type="text" placeholder="José da Silva" required />
+        </div>
+        <div class="campo">
+          <label for="comissao">Comissão serviços (%)</label>
+          <input id="comissao" type="number" min="0" max="100" step="1" value="0" />
+        </div>
+        <div class="campo">
+          <label for="comissao-prod">Comissão produtos (%)</label>
+          <input id="comissao-prod" type="number" min="0" max="100" step="1" value="0" />
         </div>
         <button class="btn btn-solid" type="submit" id="adicionar">Adicionar</button>
       </div>
@@ -67,7 +78,7 @@ function iniciar() {
   async function carregar() {
     const { data, error } = await sb
       .from('barbeiros')
-      .select('id, nome, ativo, perfil_id')
+      .select('id, nome, ativo, perfil_id, comissao_pct, comissao_produtos_pct')
       .eq('estabelecimento_id', barbearia.id)
       .order('nome');
 
@@ -83,7 +94,10 @@ function iniciar() {
       '<div class="item' + (b.ativo ? '' : ' inativo') + '">' +
         '<div class="principal"><b>' + escapar(b.nome) + '</b>' +
         '<span>' + (b.ativo ? 'Recebendo agendamentos' : 'Fora da agenda') +
+        ' · comissão ' + Number(b.comissao_pct) + '% em serviços, ' +
+        Number(b.comissao_produtos_pct) + '% em produtos' +
         (b.perfil_id ? ' · tem login próprio' : '') + '</span></div>' +
+        '<button class="btn btn-outline" data-comissao="' + b.id + '">Comissão</button>' +
         '<button class="btn btn-outline" data-alternar="' + b.id + '" data-ativo="' + b.ativo + '">' +
           (b.ativo ? 'Afastar' : 'Reativar') + '</button>' +
         '<button class="btn btn-perigo" data-apagar="' + b.id + '">Excluir</button>' +
@@ -98,7 +112,9 @@ function iniciar() {
 
     botao.disabled = true;
     const { error } = await sb.from('barbeiros').insert({
-      estabelecimento_id: barbearia.id, nome
+      estabelecimento_id: barbearia.id, nome,
+      comissao_pct: Number(document.getElementById('comissao').value) || 0,
+      comissao_produtos_pct: Number(document.getElementById('comissao-prod').value) || 0
     });
     botao.disabled = false;
 
@@ -110,6 +126,35 @@ function iniciar() {
   });
 
   lista.addEventListener('click', async (e) => {
+    const comissao = e.target.closest('[data-comissao]');
+    if (comissao) {
+      const atual = await sb.from('barbeiros')
+        .select('nome, comissao_pct, comissao_produtos_pct')
+        .eq('id', comissao.dataset.comissao).single();
+
+      const servicosPct = prompt(
+        'Comissão de ' + atual.data.nome + ' em SERVIÇOS (%)',
+        Number(atual.data.comissao_pct));
+      if (servicosPct === null) return;
+
+      const produtosPct = prompt(
+        'Comissão de ' + atual.data.nome + ' em PRODUTOS (%)',
+        Number(atual.data.comissao_produtos_pct));
+      if (produtosPct === null) return;
+
+      const a = Number(servicosPct), b = Number(produtosPct);
+      if (!Number.isFinite(a) || a < 0 || a > 100 || !Number.isFinite(b) || b < 0 || b > 100) {
+        alert('Use números de 0 a 100.');
+        return;
+      }
+
+      await sb.from('barbeiros')
+        .update({ comissao_pct: a, comissao_produtos_pct: b })
+        .eq('id', comissao.dataset.comissao);
+      carregar();
+      return;
+    }
+
     const alternar = e.target.closest('[data-alternar]');
     const apagar   = e.target.closest('[data-apagar]');
 

@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comandas — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Comandas</h1>
+    <p class="legenda">O que cada cliente consumiu e como pagou.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="barra">
+    <button class="btn btn-solid" id="nova" type="button">+ Abrir comanda</button>
+    <input id="data" type="date" class="entrada-data" />
+    <select id="filtro" class="entrada-data">
+      <option value="todas">Todas do dia</option>
+      <option value="aberta">Só abertas</option>
+      <option value="fechada">Só fechadas</option>
+    </select>
+    <span id="resumo" style="color:var(--muted);font-size:14px"></span>
+  </div>
+  <div id="lista"></div>
+</template>
+
+<!-- abrir comanda -->
+<div class="janela" id="janela-nova" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" data-fecha="janela-nova" aria-label="Fechar">×</button>
+    <h2>Abrir comanda</h2>
+    <p class="legenda">Para quem está sendo atendido agora.</p>
+
+    <div class="campo">
+      <label for="n-nome">Cliente</label>
+      <input id="n-nome" type="text" placeholder="Nome de quem está na cadeira" />
+    </div>
+    <div class="campo">
+      <label for="n-telefone">Telefone</label>
+      <input id="n-telefone" type="tel" placeholder="(41) 90000-0000" />
+    </div>
+    <div class="campo">
+      <label for="n-barbeiro">Profissional</label>
+      <select id="n-barbeiro"></select>
+    </div>
+
+    <div class="aviso" id="n-aviso" role="status"></div>
+    <div class="acoes">
+      <button class="btn btn-solid" id="n-abrir">Abrir</button>
+      <button class="btn btn-outline" data-fecha="janela-nova">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- adicionar item -->
+<div class="janela" id="janela-item" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" data-fecha="janela-item" aria-label="Fechar">×</button>
+    <h2>Adicionar à comanda</h2>
+
+    <div class="campo">
+      <label for="i-tipo">Tipo</label>
+      <select id="i-tipo">
+        <option value="servico">Serviço</option>
+        <option value="produto">Produto</option>
+        <option value="avulso">Outro — digitar</option>
+      </select>
+    </div>
+
+    <div class="campo" id="campo-catalogo">
+      <label for="i-item">O quê</label>
+      <select id="i-item"></select>
+    </div>
+
+    <div id="campos-avulso" style="display:none">
+      <div class="campo">
+        <label for="i-nome">Descrição</label>
+        <input id="i-nome" type="text" placeholder="Gorjeta, taxa, serviço combinado" />
+      </div>
+      <div class="campo">
+        <label for="i-preco">Valor (R$)</label>
+        <input id="i-preco" type="text" inputmode="decimal" placeholder="10,00" />
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="campo">
+        <label for="i-qtd">Quantidade</label>
+        <input id="i-qtd" type="number" min="1" value="1" />
+      </div>
+      <div class="campo">
+        <label for="i-desconto">Desconto (%)</label>
+        <input id="i-desconto" type="number" min="0" max="100" value="0" />
+      </div>
+      <div class="campo larga">
+        <label for="i-barbeiro">Comissão para</label>
+        <select id="i-barbeiro"></select>
+        <p class="dica" id="i-comissao"></p>
+      </div>
+    </div>
+
+    <div class="aviso" id="i-aviso" role="status"></div>
+    <div class="acoes">
+      <button class="btn btn-solid" id="i-adicionar">Adicionar</button>
+      <button class="btn btn-outline" data-fecha="janela-item">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- fechar comanda -->
+<div class="janela" id="janela-fechar" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" data-fecha="janela-fechar" aria-label="Fechar">×</button>
+    <h2>Fechar comanda</h2>
+    <p class="legenda" id="f-total"></p>
+
+    <div class="campo">
+      <label for="f-desconto">Desconto no total (R$)</label>
+      <input id="f-desconto" type="text" inputmode="decimal" value="0,00" />
+    </div>
+    <div class="campo">
+      <label for="f-pagamento">Forma de pagamento</label>
+      <select id="f-pagamento"></select>
+    </div>
+    <div class="campo">
+      <label for="f-obs">Observação</label>
+      <input id="f-obs" type="text" placeholder="Opcional" />
+    </div>
+
+    <div class="aviso" id="f-aviso" role="status"></div>
+    <div class="acoes">
+      <button class="btn btn-solid" id="f-confirmar">Confirmar pagamento</button>
+      <button class="btn btn-outline" data-fecha="janela-fechar">Voltar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, moeda, paraCentavos,
+         escapar, PAGAMENTOS, calcularComissao } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('comandas.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  const [equipe, servicos, produtos] = await Promise.all([
+    sb.from('barbeiros').select('id, nome, comissao_pct, comissao_produtos_pct')
+      .eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome'),
+    sb.from('servicos').select('id, nome, preco_centavos, comissao_pct')
+      .eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome'),
+    sb.from('produtos').select('id, nome, preco_centavos, estoque')
+      .eq('estabelecimento_id', barbearia.id).eq('ativo', true).order('nome')
+  ]);
+
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar(equipe.data || [], servicos.data || [], produtos.data || []);
+}
+
+function iniciar(equipe, servicos, produtos) {
+  const el = (id) => document.getElementById(id);
+  const dizer = (alvo, t, tipo = 'erro') => { el(alvo).textContent = t; el(alvo).className = 'aviso ' + tipo; };
+  const abrirJanela = (id) => { document.getElementById(id).hidden = false; };
+  const fecharJanela = (id) => { document.getElementById(id).hidden = true; };
+
+  const iso = (d) => d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+  el('data').value = iso(new Date());
+
+  const opcoesEquipe = equipe.map(b =>
+    '<option value="' + b.id + '">' + escapar(b.nome) + '</option>').join('');
+  el('n-barbeiro').innerHTML = opcoesEquipe;
+  el('i-barbeiro').innerHTML = '<option value="">Ninguém</option>' + opcoesEquipe;
+  el('f-pagamento').innerHTML = Object.entries(PAGAMENTOS)
+    .map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('');
+
+  let comandas = [];
+  let comandaAtual = null;
+
+  // ----------------------------------------------------------
+  // Listagem
+  // ----------------------------------------------------------
+  async function carregar() {
+    el('lista').innerHTML = '<p class="carregando">Carregando...</p>';
+
+    const de  = new Date(el('data').value + 'T00:00:00');
+    const ate = new Date(el('data').value + 'T23:59:59');
+
+    let consulta = sb.from('comandas')
+      .select('*, barbeiros(nome), perfis(nome, telefone), comanda_itens(*)')
+      .eq('estabelecimento_id', barbearia.id)
+      .gte('aberta_em', de.toISOString())
+      .lte('aberta_em', ate.toISOString())
+      .order('aberta_em', { ascending: false });
+
+    if (el('filtro').value !== 'todas') consulta = consulta.eq('status', el('filtro').value);
+
+    const { data, error } = await consulta;
+
+    if (error) {
+      el('lista').innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(error.message) + '</p></div>';
+      return;
+    }
+
+    comandas = data;
+
+    const fechadas = data.filter(c => c.status === 'fechada');
+    const caixa = fechadas.reduce((t, c) => t + c.total_centavos, 0);
+    const comissoes = fechadas.reduce((t, c) => t + c.comissao_centavos, 0);
+
+    el('resumo').textContent = fechadas.length + ' fechada' + (fechadas.length === 1 ? '' : 's') +
+      ' · ' + moeda(caixa) + ' · comissões ' + moeda(comissoes);
+
+    if (!data.length) {
+      el('lista').innerHTML = '<div class="vazio"><b>Nenhuma comanda nesse dia</b>' +
+        '<p>Abra uma quando o cliente sentar na cadeira.</p></div>';
+      return;
+    }
+
+    el('lista').innerHTML = data.map(cartao).join('');
+  }
+
+  function cartao(c) {
+    const nome = c.perfis?.nome || c.cliente_nome || 'Cliente';
+    const aberta = c.status === 'aberta';
+    const itens = (c.comanda_itens || []).sort((a, b) => new Date(a.criado_em) - new Date(b.criado_em));
+    const soma = itens.reduce((t, i) => t + i.total_centavos, 0);
+
+    return '<article class="comanda' + (aberta ? ' aberta' : '') + '">' +
+      '<div class="comanda-topo">' +
+        '<div><b>' + escapar(nome) + '</b> <span class="pill ' + c.status + '">' + c.status + '</span>' +
+        '<span>' + (c.barbeiros?.nome ? escapar(c.barbeiros.nome) + ' · ' : '') +
+        new Date(c.aberta_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) +
+        (c.forma_pagamento ? ' · ' + PAGAMENTOS[c.forma_pagamento] : '') + '</span></div>' +
+        '<div class="comanda-total">' + moeda(c.total_centavos || soma) +
+        '<small>comissão ' + moeda(c.comissao_centavos) + '</small></div>' +
+      '</div>' +
+
+      (itens.length
+        ? itens.map(i =>
+            '<div class="linha-item"><div class="info"><b>' +
+            (i.quantidade > 1 ? i.quantidade + 'x ' : '') + escapar(i.nome) + '</b>' +
+            '<span>' + (i.desconto_pct > 0 ? Number(i.desconto_pct) + '% de desconto · ' : '') +
+            (i.comissao_centavos ? 'comissão ' + moeda(i.comissao_centavos) : 'sem comissão') +
+            '</span></div>' +
+            '<div class="valor"><b>' + moeda(i.total_centavos) + '</b></div>' +
+            (aberta ? '<button data-remover="' + i.id + '" title="Remover">×</button>' : '') +
+            '</div>').join('')
+        : '<p class="legenda" style="padding:14px 0">Comanda vazia.</p>') +
+
+      (c.desconto_centavos > 0
+        ? '<div class="linha-item"><div class="info"><b>Desconto no total</b></div>' +
+          '<div class="valor"><b>− ' + moeda(c.desconto_centavos) + '</b></div></div>'
+        : '') +
+
+      (aberta
+        ? '<div class="acoes">' +
+            '<button class="btn btn-solid" data-item="' + c.id + '">+ Item</button>' +
+            '<button class="btn btn-outline" data-fechar="' + c.id + '">Fechar comanda</button>' +
+            '<button class="btn btn-perigo" data-cancelar="' + c.id + '">Cancelar</button>' +
+          '</div>'
+        : '') +
+    '</article>';
+  }
+
+  // ----------------------------------------------------------
+  // Abrir
+  // ----------------------------------------------------------
+  el('nova').addEventListener('click', () => {
+    el('n-nome').value = '';
+    el('n-telefone').value = '';
+    el('n-aviso').className = 'aviso';
+    abrirJanela('janela-nova');
+  });
+
+  el('n-abrir').addEventListener('click', async () => {
+    const nome = el('n-nome').value.trim();
+    if (!nome) return dizer('n-aviso', 'Informe o nome do cliente.');
+
+    el('n-abrir').disabled = true;
+    const { error } = await sb.from('comandas').insert({
+      estabelecimento_id: barbearia.id,
+      barbeiro_id: el('n-barbeiro').value || null,
+      cliente_nome: nome,
+      cliente_telefone: el('n-telefone').value.trim() || null
+    });
+    el('n-abrir').disabled = false;
+
+    if (error) return dizer('n-aviso', 'Não foi possível abrir: ' + error.message);
+
+    fecharJanela('janela-nova');
+    el('data').value = iso(new Date());
+    carregar();
+  });
+
+  // ----------------------------------------------------------
+  // Itens
+  // ----------------------------------------------------------
+  function preencherCatalogo() {
+    const tipo = el('i-tipo').value;
+    el('campo-catalogo').style.display = tipo === 'avulso' ? 'none' : '';
+    el('campos-avulso').style.display = tipo === 'avulso' ? '' : 'none';
+
+    if (tipo === 'servico') {
+      el('i-item').innerHTML = servicos.map(s =>
+        '<option value="' + s.id + '">' + escapar(s.nome) + ' — ' + moeda(s.preco_centavos) + '</option>').join('')
+        || '<option value="">Nenhum serviço cadastrado</option>';
+    } else if (tipo === 'produto') {
+      el('i-item').innerHTML = produtos.map(p =>
+        '<option value="' + p.id + '"' + (p.estoque <= 0 ? ' disabled' : '') + '>' +
+        escapar(p.nome) + ' — ' + moeda(p.preco_centavos) +
+        ' (' + p.estoque + ' em estoque)</option>').join('')
+        || '<option value="">Nenhum produto cadastrado</option>';
+    }
+    mostrarComissao();
+  }
+
+  function mostrarComissao() {
+    const barbeiro = equipe.find(b => b.id === el('i-barbeiro').value);
+    if (!barbeiro) { el('i-comissao').textContent = 'Sem comissão para este item.'; return; }
+
+    const tipo = el('i-tipo').value;
+    let pct;
+    if (tipo === 'produto') {
+      pct = Number(barbeiro.comissao_produtos_pct) || 0;
+    } else {
+      const servico = servicos.find(s => s.id === el('i-item').value);
+      pct = servico?.comissao_pct != null ? Number(servico.comissao_pct) : Number(barbeiro.comissao_pct) || 0;
+    }
+    el('i-comissao').textContent = pct
+      ? pct + '% para ' + barbeiro.nome + ', sobre o valor ' +
+        (barbearia.base_comissao === 'tabela' ? 'de tabela' : 'cobrado') + '.'
+      : 'Esse profissional está com comissão 0% para esse tipo de item.';
+  }
+
+  el('i-tipo').addEventListener('change', preencherCatalogo);
+  el('i-item').addEventListener('change', mostrarComissao);
+  el('i-barbeiro').addEventListener('change', mostrarComissao);
+
+  el('i-adicionar').addEventListener('click', async () => {
+    if (!comandaAtual) return;
+
+    const tipo = el('i-tipo').value;
+    const qtd = Number(el('i-qtd').value) || 1;
+    const desconto = Number(el('i-desconto').value) || 0;
+    const barbeiro = equipe.find(b => b.id === el('i-barbeiro').value);
+
+    let nome, precoUnit, servico_id = null, produto_id = null, pct = 0;
+
+    if (tipo === 'avulso') {
+      nome = el('i-nome').value.trim();
+      precoUnit = paraCentavos(el('i-preco').value);
+      if (!nome) return dizer('i-aviso', 'Descreva o item.');
+      if (precoUnit === null) return dizer('i-aviso', 'Valor inválido.');
+      pct = barbeiro ? Number(barbeiro.comissao_pct) || 0 : 0;
+
+    } else if (tipo === 'servico') {
+      const s = servicos.find(x => x.id === el('i-item').value);
+      if (!s) return dizer('i-aviso', 'Escolha o serviço.');
+      nome = s.nome; precoUnit = s.preco_centavos; servico_id = s.id;
+      pct = s.comissao_pct != null ? Number(s.comissao_pct)
+           : barbeiro ? Number(barbeiro.comissao_pct) || 0 : 0;
+
+    } else {
+      const p = produtos.find(x => x.id === el('i-item').value);
+      if (!p) return dizer('i-aviso', 'Escolha o produto.');
+      if (p.estoque < qtd) return dizer('i-aviso', 'Só há ' + p.estoque + ' em estoque.');
+      nome = p.nome; precoUnit = p.preco_centavos; produto_id = p.id;
+      pct = barbeiro ? Number(barbeiro.comissao_produtos_pct) || 0 : 0;
+    }
+
+    const cheio = precoUnit * qtd;
+    const total = Math.round(cheio * (1 - desconto / 100));
+    const comissao = barbeiro
+      ? calcularComissao({ pct, precoCheio: cheio, precoCobrado: total, base: barbearia.base_comissao })
+      : 0;
+
+    el('i-adicionar').disabled = true;
+    const { error } = await sb.from('comanda_itens').insert({
+      comanda_id: comandaAtual,
+      tipo, servico_id, produto_id,
+      barbeiro_id: barbeiro ? barbeiro.id : null,
+      nome, quantidade: qtd,
+      preco_unit_centavos: precoUnit,
+      desconto_pct: desconto,
+      total_centavos: total,
+      comissao_pct: pct,
+      comissao_centavos: comissao
+    });
+    el('i-adicionar').disabled = false;
+
+    if (error) return dizer('i-aviso', 'Não foi possível adicionar: ' + error.message);
+
+    // o estoque local acompanha, para o próximo item já ver certo
+    if (produto_id) {
+      const p = produtos.find(x => x.id === produto_id);
+      if (p) p.estoque -= qtd;
+    }
+
+    dizer('i-aviso', 'Item adicionado.', 'ok');
+    el('i-qtd').value = 1;
+    el('i-desconto').value = 0;
+    el('i-nome').value = '';
+    el('i-preco').value = '';
+    preencherCatalogo();
+    carregar();
+  });
+
+  // ----------------------------------------------------------
+  // Fechar
+  // ----------------------------------------------------------
+  el('f-confirmar').addEventListener('click', async () => {
+    if (!comandaAtual) return;
+    const c = comandas.find(x => x.id === comandaAtual);
+    if (!c) return;
+
+    const desconto = paraCentavos(el('f-desconto').value) || 0;
+    const soma = (c.comanda_itens || []).reduce((t, i) => t + i.total_centavos, 0);
+
+    if (desconto > soma) return dizer('f-aviso', 'O desconto é maior que o total da comanda.');
+
+    el('f-confirmar').disabled = true;
+    const { error } = await sb.from('comandas').update({
+      status: 'fechada',
+      desconto_centavos: desconto,
+      total_centavos: Math.max(0, soma - desconto),
+      forma_pagamento: el('f-pagamento').value,
+      observacao: el('f-obs').value.trim() || null,
+      fechada_em: new Date().toISOString()
+    }).eq('id', comandaAtual);
+    el('f-confirmar').disabled = false;
+
+    if (error) return dizer('f-aviso', 'Não foi possível fechar: ' + error.message);
+
+    fecharJanela('janela-fechar');
+    comandaAtual = null;
+    carregar();
+  });
+
+  // ----------------------------------------------------------
+  // Ações da lista
+  // ----------------------------------------------------------
+  el('lista').addEventListener('click', async (e) => {
+    const item = e.target.closest('[data-item]');
+    const fechar = e.target.closest('[data-fechar]');
+    const cancelar = e.target.closest('[data-cancelar]');
+    const remover = e.target.closest('[data-remover]');
+
+    if (item) {
+      comandaAtual = item.dataset.item;
+      const c = comandas.find(x => x.id === comandaAtual);
+      el('i-barbeiro').value = c?.barbeiro_id || '';
+      el('i-aviso').className = 'aviso';
+      preencherCatalogo();
+      abrirJanela('janela-item');
+      return;
+    }
+
+    if (fechar) {
+      comandaAtual = fechar.dataset.fechar;
+      const c = comandas.find(x => x.id === comandaAtual);
+      const soma = (c?.comanda_itens || []).reduce((t, i) => t + i.total_centavos, 0);
+      if (!soma) { alert('A comanda está vazia. Adicione ao menos um item.'); return; }
+      el('f-total').textContent = 'Total dos itens: ' + moeda(soma);
+      el('f-desconto').value = '0,00';
+      el('f-obs').value = '';
+      el('f-aviso').className = 'aviso';
+      abrirJanela('janela-fechar');
+      return;
+    }
+
+    if (cancelar) {
+      if (!confirm('Cancelar essa comanda? Os produtos voltam para o estoque.')) return;
+      cancelar.disabled = true;
+      // apaga os itens primeiro, para o estoque ser devolvido pelo gatilho
+      await sb.from('comanda_itens').delete().eq('comanda_id', cancelar.dataset.cancelar);
+      await sb.from('comandas').update({ status: 'cancelada', total_centavos: 0, comissao_centavos: 0 })
+        .eq('id', cancelar.dataset.cancelar);
+      carregar();
+      return;
+    }
+
+    if (remover) {
+      remover.disabled = true;
+      await sb.from('comanda_itens').delete().eq('id', remover.dataset.remover);
+      carregar();
+    }
+  });
+
+  document.querySelectorAll('[data-fecha]').forEach(b =>
+    b.addEventListener('click', () => fecharJanela(b.dataset.fecha)));
+
+  el('data').addEventListener('change', carregar);
+  el('filtro').addEventListener('change', carregar);
+
+  // veio da agenda pedindo comanda de um atendimento?
+  const doAgendamento = new URLSearchParams(location.search).get('agendamento');
+  if (doAgendamento) abrirDoAgendamento(doAgendamento);
+
+  async function abrirDoAgendamento(id) {
+    const { data: ja } = await sb.from('comandas')
+      .select('id').eq('agendamento_id', id).maybeSingle();
+
+    if (ja) { carregar(); return; }
+
+    const { data: ag } = await sb.from('agendamentos')
+      .select('id, barbeiro_id, cliente_id, cliente_nome, cliente_telefone, inicio, perfis(nome, telefone), agendamento_servicos(*)')
+      .eq('id', id).maybeSingle();
+
+    if (!ag) { carregar(); return; }
+
+    const { data: nova, error } = await sb.from('comandas').insert({
+      estabelecimento_id: barbearia.id,
+      agendamento_id: ag.id,
+      barbeiro_id: ag.barbeiro_id,
+      cliente_id: ag.cliente_id,
+      cliente_nome: ag.perfis?.nome || ag.cliente_nome,
+      cliente_telefone: ag.perfis?.telefone || ag.cliente_telefone
+    }).select('id').single();
+
+    if (error) { carregar(); return; }
+
+    // traz os serviços do agendamento já com o preço que foi cobrado
+    const barbeiro = equipe.find(b => b.id === ag.barbeiro_id);
+    const itens = (ag.agendamento_servicos || []).map(v => {
+      const servico = servicos.find(s => s.id === v.servico_id);
+      const pct = servico?.comissao_pct != null ? Number(servico.comissao_pct)
+                : barbeiro ? Number(barbeiro.comissao_pct) || 0 : 0;
+      const cobrado = v.preco_cobrado_centavos ?? v.preco_centavos;
+      return {
+        comanda_id: nova.id, tipo: 'servico', servico_id: v.servico_id,
+        barbeiro_id: ag.barbeiro_id, nome: v.nome, quantidade: 1,
+        preco_unit_centavos: v.preco_centavos,
+        desconto_pct: Number(v.desconto_pct) || 0,
+        total_centavos: cobrado,
+        comissao_pct: pct,
+        comissao_centavos: calcularComissao({
+          pct, precoCheio: v.preco_centavos, precoCobrado: cobrado, base: barbearia.base_comissao
+        })
+      };
+    });
+
+    if (itens.length) await sb.from('comanda_itens').insert(itens);
+
+    el('data').value = iso(new Date(ag.inicio));
+    history.replaceState(null, '', 'comandas.html');
+    carregar();
+  }
+
+  carregar();
+}
+</script>
+
+</body>
+</html>

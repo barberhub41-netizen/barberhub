@@ -21,6 +21,11 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Chave PÚBLICA do push. Pode ficar aqui: ela é feita para
+// aparecer no navegador. A privada fica só nos segredos da
+// Edge Function, no painel do Supabase.
+export const VAPID_PUBLICA = 'BGiPaXnap1b2N5VwqXdJoxP9tCVTDMx9fu9zq5-ceKe2WSekPQqwy8_we33ruEiQ3iOmVD-F3xbwpXpuv78Ma3s';
+
 // Traduz as mensagens de erro do Supabase, que vêm em inglês.
 export function traduzErro(mensagem = '') {
   const m = mensagem.toLowerCase();

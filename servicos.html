@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Serviços — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -16,7 +19,7 @@
 <main class="pagina">
   <div class="wrap">
     <h1>Serviços</h1>
-    <p class="legenda">O que a sua barbearia oferece, com preço e duração.</p>
+    <p class="legenda">O que a sua barbearia oferece, com preço e duração. A comissão em branco usa a do profissional.</p>
     <div id="menu"></div>
 
     <div id="conteudo"><p class="carregando">Carregando...</p></div>
@@ -26,7 +29,7 @@
 <template id="modelo">
   <div class="painel" style="max-width:860px">
     <form id="novo">
-      <div class="linha-form">
+      <div class="linha-form" style="grid-template-columns:2fr 1fr 1fr 1fr auto">
         <div class="campo">
           <label for="nome">Serviço</label>
           <input id="nome" type="text" placeholder="Corte + barba" required />
@@ -38,6 +41,10 @@
         <div class="campo">
           <label for="duracao">Duração (min)</label>
           <input id="duracao" type="number" min="5" max="600" step="5" placeholder="50" required />
+        </div>
+        <div class="campo">
+          <label for="comissao">Comissão (%)</label>
+          <input id="comissao" type="number" min="0" max="100" step="1" placeholder="—" />
         </div>
         <button class="btn btn-solid" type="submit" id="adicionar">Adicionar</button>
       </div>
@@ -78,7 +85,7 @@ function iniciar() {
   async function carregar() {
     const { data, error } = await sb
       .from('servicos')
-      .select('id, nome, preco_centavos, duracao_min, ativo')
+      .select('id, nome, preco_centavos, duracao_min, ativo, comissao_pct')
       .eq('estabelecimento_id', barbearia.id)
       .order('nome');
 
@@ -94,6 +101,7 @@ function iniciar() {
       '<div class="item' + (s.ativo ? '' : ' inativo') + '">' +
         '<div class="principal"><b>' + escapar(s.nome) + '</b>' +
         '<span>' + moeda(s.preco_centavos) + ' · ' + duracao(s.duracao_min) +
+        (s.comissao_pct != null ? ' · comissão ' + Number(s.comissao_pct) + '%' : ' · comissão do barbeiro') +
         (s.ativo ? '' : ' · oculto do cliente') + '</span></div>' +
         '<button class="btn btn-outline" data-alternar="' + s.id + '" data-ativo="' + s.ativo + '">' +
           (s.ativo ? 'Ocultar' : 'Mostrar') + '</button>' +
@@ -115,7 +123,9 @@ function iniciar() {
     botao.disabled = true;
     const { error } = await sb.from('servicos').insert({
       estabelecimento_id: barbearia.id,
-      nome, preco_centavos: centavos, duracao_min: minutos
+      nome, preco_centavos: centavos, duracao_min: minutos,
+      comissao_pct: document.getElementById('comissao').value === ''
+        ? null : Number(document.getElementById('comissao').value)
     });
     botao.disabled = false;
 

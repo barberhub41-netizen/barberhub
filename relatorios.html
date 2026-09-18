@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Relatórios — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -38,11 +41,15 @@
     </span>
     <span id="intervalo" style="color:var(--muted);font-size:14px"></span>
   </div>
+  <div class="abas">
+    <button class="on" data-aba="movimento" type="button">Movimento</button>
+    <button data-aba="caixa" type="button">Caixa e comissões</button>
+  </div>
   <div id="painel"></div>
 </template>
 
 <script type="module">
-import { sb, montarTopo, exigirLogin, montarPainel, moeda, escapar } from './app.js';
+import { sb, montarTopo, exigirLogin, montarPainel, moeda, escapar, PAGAMENTOS } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('estabelecimento');
@@ -58,6 +65,8 @@ if (!barbearia) {
   conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
   iniciar();
 }
+
+let equipe = [];
 
 function iniciar() {
   const elPeriodo = document.getElementById('periodo');
@@ -95,9 +104,22 @@ function iniciar() {
     }
   }
 
+  let aba = 'movimento';
+
+  document.querySelector('.abas').addEventListener('click', (e) => {
+    const botao = e.target.closest('[data-aba]');
+    if (!botao) return;
+    document.querySelectorAll('.abas button').forEach(b => b.classList.remove('on'));
+    botao.classList.add('on');
+    aba = botao.dataset.aba;
+    carregar();
+  });
+
   async function carregar() {
     painel.innerHTML = '<p class="carregando">Calculando...</p>';
     const [de, ate] = faixa();
+    elInterv.textContent = de.toLocaleDateString('pt-BR') + ' a ' + ate.toLocaleDateString('pt-BR');
+    if (aba === 'caixa') return carregarCaixa(de, ate);
 
     elInterv.textContent = de.toLocaleDateString('pt-BR') + ' a ' + ate.toLocaleDateString('pt-BR');
 
@@ -184,6 +206,97 @@ function iniciar() {
       quebra('Por dia da semana', porDia);
   }
 
+  // ----------------------------------------------------------
+  // Caixa e comissões, a partir das comandas fechadas
+  // ----------------------------------------------------------
+  async function carregarCaixa(de, ate) {
+    const [comandas, concluidos] = await Promise.all([
+      sb.from('comandas')
+        .select('id, total_centavos, comissao_centavos, forma_pagamento, desconto_centavos, comanda_itens(nome, tipo, total_centavos, comissao_centavos, barbeiro_id)')
+        .eq('estabelecimento_id', barbearia.id)
+        .eq('status', 'fechada')
+        .gte('aberta_em', de.toISOString()).lte('aberta_em', ate.toISOString()),
+      sb.from('agendamentos')
+        .select('id', { count: 'exact', head: true })
+        .eq('estabelecimento_id', barbearia.id)
+        .eq('status', 'concluido')
+        .gte('inicio', de.toISOString()).lte('inicio', ate.toISOString())
+    ]);
+
+    if (comandas.error) {
+      painel.innerHTML = '<div class="vazio"><b>Erro ao carregar</b><p>' + escapar(comandas.error.message) + '</p></div>';
+      return;
+    }
+
+    const lista = comandas.data || [];
+
+    if (!lista.length) {
+      painel.innerHTML = '<div class="vazio"><b>Nenhuma comanda fechada no período</b>' +
+        '<p>O caixa e as comissões saem das comandas. Abra e feche uma em cada atendimento.</p>' +
+        '<a class="btn btn-solid" href="comandas.html">Ir para comandas</a></div>';
+      return;
+    }
+
+    const caixa = lista.reduce((t, c) => t + c.total_centavos, 0);
+    const comissoes = lista.reduce((t, c) => t + c.comissao_centavos, 0);
+    const descontos = lista.reduce((t, c) => t + c.desconto_centavos, 0);
+
+    const itens = lista.flatMap(c => c.comanda_itens || []);
+    const produtos = itens.filter(i => i.tipo === 'produto');
+    const servicos = itens.filter(i => i.tipo !== 'produto');
+
+    // por forma de pagamento
+    const porPagamento = new Map();
+    lista.forEach(c => {
+      const k = PAGAMENTOS[c.forma_pagamento] || 'Não informado';
+      porPagamento.set(k, (porPagamento.get(k) || 0) + c.total_centavos);
+    });
+
+    // por profissional
+    const nomes = new Map((equipe || []).map(b => [b.id, b.nome]));
+    const porBarbeiro = new Map();
+    itens.forEach(i => {
+      const k = nomes.get(i.barbeiro_id) || 'Sem profissional';
+      if (!porBarbeiro.has(k)) porBarbeiro.set(k, { qtd: 0, valor: 0, comissao: 0 });
+      const v = porBarbeiro.get(k);
+      v.qtd++; v.valor += i.total_centavos; v.comissao += i.comissao_centavos;
+    });
+
+    const semComanda = Math.max(0, (concluidos.count || 0) - lista.length);
+
+    painel.innerHTML =
+      (semComanda
+        ? '<div class="aviso erro" style="display:block;margin-bottom:18px">' +
+          semComanda + ' atendimento' + (semComanda === 1 ? '' : 's') +
+          ' concluído' + (semComanda === 1 ? '' : 's') + ' sem comanda no período. ' +
+          'Esses valores não entram no caixa nem na comissão.</div>'
+        : '') +
+      '<div class="kpis">' +
+        kpi('Caixa', moeda(caixa), lista.length + ' comanda' + (lista.length === 1 ? '' : 's') + ' fechada' + (lista.length === 1 ? '' : 's')) +
+        kpi('Comissões', moeda(comissoes), 'a pagar aos profissionais') +
+        kpi('Sobra', moeda(caixa - comissoes), 'caixa menos comissão') +
+        kpi('Descontos', moeda(descontos), 'concedidos no fechamento', true) +
+      '</div>' +
+      '<div class="kpis" style="margin-top:14px">' +
+        kpi('Serviços', moeda(servicos.reduce((t, i) => t + i.total_centavos, 0)), servicos.length + ' itens', true) +
+        kpi('Produtos', moeda(produtos.reduce((t, i) => t + i.total_centavos, 0)), produtos.length + ' itens', true) +
+      '</div>' +
+
+      '<div class="quebra"><h3>Comissão por profissional</h3>' +
+        '<div class="rolagem"><table class="tabela"><thead><tr><th>Profissional</th>' +
+        '<th class="num">Itens</th><th class="num">Produziu</th><th class="num">A receber</th></tr></thead><tbody>' +
+        [...porBarbeiro.entries()].sort((a, b) => b[1].comissao - a[1].comissao).map(([nome, v]) =>
+          '<tr><td><b>' + escapar(nome) + '</b></td>' +
+          '<td class="num">' + v.qtd + '</td>' +
+          '<td class="num">' + moeda(v.valor) + '</td>' +
+          '<td class="num"><b>' + moeda(v.comissao) + '</b></td></tr>'
+        ).join('') + '</tbody></table></div></div>' +
+
+      quebra('Por forma de pagamento',
+        [...porPagamento.entries()].map(([k, v]) => [k, { qtd: 0, valor: v }])
+          .sort((a, b) => b[1].valor - a[1].valor));
+  }
+
   function agrupar(lista, chaveDe) {
     const m = new Map();
     lista.forEach(a => {
@@ -210,7 +323,7 @@ function iniciar() {
     return '<div class="quebra"><h3>' + titulo + '</h3>' +
       dados.map(([nome, v]) =>
         '<div class="dado"><div class="dado-topo"><b>' + escapar(nome) + '</b>' +
-        '<span>' + moeda(v.valor) + ' · ' + v.qtd + 'x</span></div>' +
+        '<span>' + moeda(v.valor) + (v.qtd ? ' · ' + v.qtd + 'x' : '') + '</span></div>' +
         '<div class="trilho"><i style="width:' + Math.max(3, (v.valor / maior) * 100) + '%"></i></div></div>'
       ).join('') + '</div>';
   }
@@ -221,6 +334,10 @@ function iniciar() {
   });
   elDe.addEventListener('change', carregar);
   elAte.addEventListener('change', carregar);
+
+  sb.from('barbeiros').select('id, nome')
+    .eq('estabelecimento_id', barbearia.id)
+    .then(({ data }) => { equipe = data || []; });
 
   carregar();
 }

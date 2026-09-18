@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Meus agendamentos — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -21,6 +24,25 @@
     <div id="lista"><p class="carregando">Carregando...</p></div>
   </div>
 </main>
+
+<div class="janela" id="janela-cal" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" id="cal-fechar" aria-label="Fechar">×</button>
+    <h2>Adicionar ao calendário</h2>
+    <p class="legenda" id="cal-resumo"></p>
+
+    <div class="acoes" style="flex-direction:column;align-items:stretch">
+      <a class="btn btn-solid" id="cal-google" target="_blank" rel="noopener">Google Agenda</a>
+      <button class="btn btn-outline" id="cal-ics">iPhone, Outlook e outros</button>
+    </div>
+
+    <p class="legenda" style="margin-top:18px;font-size:13px">
+      No iPhone, o arquivo abre direto no Calendário. Se o navegador só baixar,
+      toque no arquivo em Downloads para adicionar. O convite já vem com
+      lembrete duas horas antes.
+    </p>
+  </div>
+</div>
 
 <div class="janela" id="janela" hidden>
   <div class="janela-caixa">
@@ -55,7 +77,7 @@
 
 <script type="module">
 import { sb, montarTopo, exigirLogin, quando, moeda, escapar, estrelas,
-         assinaturaDoCliente } from './app.js';
+         assinaturaDoCliente, linkGoogleAgenda, baixarIcs } from './app.js';
 
 const sessao = await exigirLogin();
 montarTopo('');
@@ -79,6 +101,9 @@ function cartao(a, futuro) {
       '<span>' + (barbeiro ? 'com ' + escapar(barbeiro) : '') +
       (a.valor_centavos ? ' · ' + moeda(a.valor_centavos) : '') + '</span></div>' +
     '<span class="selo ' + a.status + '">' + a.status + '</span>' +
+    (futuro && a.status !== 'cancelado'
+      ? '<button class="btn btn-outline" data-calendario="' + a.id + '">+ Calendário</button>'
+      : '') +
     (podeCancelar
       ? '<button class="btn btn-outline" data-cancelar="' + a.id + '">Cancelar</button>'
       : '') +
@@ -96,7 +121,7 @@ async function carregar() {
 
   const { data, error } = await sb
     .from('agendamentos')
-    .select('id, inicio, fim, status, valor_centavos, estabelecimento_id, barbeiro_id, agendamento_servicos(nome, ordem), barbeiros(nome), estabelecimentos(nome, cidade), avaliacoes(id, nota, comentario)')
+    .select('id, inicio, fim, status, valor_centavos, estabelecimento_id, barbeiro_id, agendamento_servicos(nome, ordem), barbeiros(nome), estabelecimentos(nome, cidade, bairro, logradouro, numero, uf), avaliacoes(id, nota, comentario)')
     .eq('cliente_id', sessao.user.id)
     .order('inicio', { ascending: false });
 
@@ -278,6 +303,58 @@ document.getElementById('j-enviar').addEventListener('click', async () => {
         : '') +
       '</article>').join('');
 })();
+
+// ------------------------------------------------------------
+// Calendário
+// ------------------------------------------------------------
+const janelaCal = document.getElementById('janela-cal');
+let paraCalendario = null;
+
+function dadosDoEvento(a) {
+  const itens = (a.agendamento_servicos || []).sort((x, y) => x.ordem - y.ordem);
+  const servicos = itens.map(i => i.nome).join(' + ') || 'Atendimento';
+  const e = a.estabelecimentos || {};
+  const local = [
+    [e.logradouro, e.numero].filter(Boolean).join(', '),
+    e.bairro, [e.cidade, e.uf].filter(Boolean).join(' - ')
+  ].filter(Boolean).join(', ');
+
+  return {
+    id: a.id,
+    titulo: servicos + ' — ' + (e.nome || 'Barbearia'),
+    inicio: a.inicio,
+    fim: a.fim,
+    local,
+    descricao: servicos +
+      (a.barbeiros?.nome ? ' com ' + a.barbeiros.nome : '') +
+      (a.valor_centavos ? ' · ' + moeda(a.valor_centavos) : '') +
+      '. Agendado pelo BarberHub.'
+  };
+}
+
+lista.addEventListener('click', (e) => {
+  const botao = e.target.closest('[data-calendario]');
+  if (!botao) return;
+
+  const a = ultimos.find(x => x.id === botao.dataset.calendario);
+  if (!a) return;
+
+  paraCalendario = dadosDoEvento(a);
+  document.getElementById('cal-resumo').textContent =
+    paraCalendario.titulo + ' · ' + quando(a.inicio);
+  document.getElementById('cal-google').href = linkGoogleAgenda(paraCalendario);
+  janelaCal.hidden = false;
+});
+
+document.getElementById('cal-ics').addEventListener('click', () => {
+  if (!paraCalendario) return;
+  baixarIcs(paraCalendario, 'barberhub.ics');
+});
+
+const fecharCal = () => { janelaCal.hidden = true; paraCalendario = null; };
+document.getElementById('cal-fechar').addEventListener('click', fecharCal);
+janelaCal.addEventListener('click', (e) => { if (e.target === janelaCal) fecharCal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !janelaCal.hidden) fecharCal(); });
 
 carregar();
 </script>

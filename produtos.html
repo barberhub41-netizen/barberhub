@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Produtos — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="pagina">
+  <div class="wrap">
+    <h1>Produtos</h1>
+    <p class="legenda">O que você vende além dos serviços. O estoque baixa sozinho quando sai numa comanda.</p>
+    <div id="menu"></div>
+    <div id="conteudo"><p class="carregando">Carregando...</p></div>
+  </div>
+</main>
+
+<template id="modelo">
+  <div class="painel" style="max-width:900px">
+    <form id="novo">
+      <div class="form-grid">
+        <div class="campo larga" style="margin-top:0">
+          <label for="nome">Produto</label>
+          <input id="nome" type="text" placeholder="Pomada modeladora 120g" required />
+        </div>
+        <div class="campo">
+          <label for="preco">Preço de venda (R$)</label>
+          <input id="preco" type="text" inputmode="decimal" placeholder="45,00" required />
+        </div>
+        <div class="campo">
+          <label for="custo">Custo (R$)</label>
+          <input id="custo" type="text" inputmode="decimal" placeholder="22,00" />
+          <p class="dica">Usado para calcular a margem.</p>
+        </div>
+        <div class="campo">
+          <label for="estoque">Quantidade inicial</label>
+          <input id="estoque" type="number" min="0" value="0" />
+        </div>
+        <div class="campo">
+          <label for="minimo">Avisar quando restar</label>
+          <input id="minimo" type="number" min="0" value="2" />
+        </div>
+      </div>
+      <div class="aviso" id="aviso" role="status"></div>
+      <div class="acoes"><button class="btn btn-solid" type="submit" id="adicionar">Adicionar produto</button></div>
+    </form>
+  </div>
+
+  <div id="alerta-estoque"></div>
+  <div id="lista" style="margin-top:22px"></div>
+</template>
+
+<div class="janela" id="janela" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" id="fechar" aria-label="Fechar">×</button>
+    <h2 id="j-titulo">Mexer no estoque</h2>
+    <p class="legenda" id="j-atual"></p>
+
+    <div class="campo">
+      <label for="j-tipo">O que aconteceu</label>
+      <select id="j-tipo">
+        <option value="entrada">Entrada — chegou mercadoria</option>
+        <option value="saida">Saída — uso interno, perda, quebra</option>
+        <option value="ajuste">Ajuste — corrigir para a contagem real</option>
+      </select>
+    </div>
+
+    <div class="campo">
+      <label for="j-qtd">Quantidade</label>
+      <input id="j-qtd" type="number" min="0" value="1" />
+      <p class="dica" id="j-dica">Quantas unidades entraram.</p>
+    </div>
+
+    <div class="campo">
+      <label for="j-motivo">Observação</label>
+      <input id="j-motivo" type="text" placeholder="Nota fiscal 1234, contagem do mês..." />
+    </div>
+
+    <div class="aviso" id="j-aviso" role="status"></div>
+    <div class="acoes">
+      <button class="btn btn-solid" id="j-salvar">Registrar</button>
+      <button class="btn btn-outline" id="j-cancelar">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { sb, montarTopo, exigirLogin, montarPainel, moeda,
+         paraCentavos, escapar } from './app.js';
+
+const sessao = await exigirLogin();
+montarTopo('estabelecimento');
+const barbearia = await montarPainel('produtos.html');
+
+const conteudo = document.getElementById('conteudo');
+
+if (!barbearia) {
+  conteudo.innerHTML = '<div class="vazio"><b>Cadastre a barbearia primeiro</b>' +
+    '<a class="btn btn-solid" href="estabelecimento.html">Cadastrar barbearia</a></div>';
+} else {
+  conteudo.innerHTML = '';
+  conteudo.appendChild(document.getElementById('modelo').content.cloneNode(true));
+  iniciar();
+}
+
+function iniciar() {
+  const el = (id) => document.getElementById(id);
+  const dizer = (alvo, t, tipo = 'erro') => { el(alvo).textContent = t; el(alvo).className = 'aviso ' + tipo; };
+
+  const janela = document.getElementById('janela');
+  let produtos = [];
+  let alvo = null;
+
+  async function carregar() {
+    const { data, error } = await sb.from('produtos')
+      .select('id, nome, preco_centavos, custo_centavos, estoque, estoque_minimo, ativo')
+      .eq('estabelecimento_id', barbearia.id)
+      .order('nome');
+
+    if (error) { el('lista').innerHTML = '<p class="legenda">Erro: ' + escapar(error.message) + '</p>'; return; }
+
+    produtos = data;
+
+    const acabando = data.filter(p => p.ativo && p.estoque <= p.estoque_minimo);
+    el('alerta-estoque').innerHTML = acabando.length
+      ? '<div class="aviso erro" style="display:block;margin-top:20px">' +
+        '<b>' + acabando.length + (acabando.length === 1 ? ' produto está' : ' produtos estão') +
+        ' no limite:</b> ' + acabando.map(p => escapar(p.nome) + ' (' + p.estoque + ')').join(', ') +
+        '</div>'
+      : '';
+
+    if (!data.length) {
+      el('lista').innerHTML = '<div class="vazio"><b>Nenhum produto ainda</b>' +
+        '<p>Cadastre o que você revende: pomada, shampoo, óleo de barba.</p></div>';
+      return;
+    }
+
+    el('lista').innerHTML = '<div class="rolagem"><table class="tabela">' +
+      '<thead><tr><th>Produto</th><th class="num">Venda</th><th class="num">Custo</th>' +
+      '<th class="num">Margem</th><th class="num">Estoque</th><th></th></tr></thead><tbody>' +
+      data.map(p => {
+        const margem = p.preco_centavos - p.custo_centavos;
+        const pct = p.preco_centavos ? Math.round((margem / p.preco_centavos) * 100) : 0;
+        const baixo = p.estoque <= p.estoque_minimo;
+        return '<tr' + (p.ativo ? '' : ' style="opacity:.5"') + '>' +
+          '<td><b>' + escapar(p.nome) + '</b>' +
+            (p.ativo ? '' : '<span>inativo</span>') + '</td>' +
+          '<td class="num">' + moeda(p.preco_centavos) + '</td>' +
+          '<td class="num">' + moeda(p.custo_centavos) + '</td>' +
+          '<td class="num">' + moeda(margem) + '<span>' + pct + '%</span></td>' +
+          '<td class="num"><b' + (baixo ? ' class="estoque-baixo"' : '') + '>' + p.estoque + '</b>' +
+            '<span>mín. ' + p.estoque_minimo + '</span></td>' +
+          '<td class="num">' +
+            '<button class="btn btn-outline" data-mexer="' + p.id + '">Estoque</button> ' +
+            '<button class="btn btn-outline" data-alternar="' + p.id + '" data-ativo="' + p.ativo + '">' +
+              (p.ativo ? 'Ocultar' : 'Mostrar') + '</button>' +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  el('novo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nome = el('nome').value.trim();
+    const preco = paraCentavos(el('preco').value);
+    const custo = el('custo').value ? paraCentavos(el('custo').value) : 0;
+
+    if (!nome) return dizer('aviso', 'Informe o nome do produto.');
+    if (preco === null) return dizer('aviso', 'Preço inválido. Use algo como 45,00.');
+
+    el('adicionar').disabled = true;
+    const estoque = Number(el('estoque').value) || 0;
+
+    const { data, error } = await sb.from('produtos').insert({
+      estabelecimento_id: barbearia.id,
+      nome,
+      preco_centavos: preco,
+      custo_centavos: custo || 0,
+      estoque,
+      estoque_minimo: Number(el('minimo').value) || 0
+    }).select('id').single();
+
+    if (!error && estoque > 0) {
+      await sb.from('movimentos_estoque').insert({
+        produto_id: data.id, tipo: 'entrada', quantidade: estoque, motivo: 'Cadastro inicial'
+      });
+    }
+
+    el('adicionar').disabled = false;
+    if (error) return dizer('aviso', 'Não foi possível salvar: ' + error.message);
+
+    el('novo').reset();
+    el('estoque').value = 0;
+    el('minimo').value = 2;
+    dizer('aviso', 'Produto cadastrado.', 'ok');
+    carregar();
+  });
+
+  el('lista').addEventListener('click', async (e) => {
+    const mexer = e.target.closest('[data-mexer]');
+    const alternar = e.target.closest('[data-alternar]');
+
+    if (alternar) {
+      alternar.disabled = true;
+      await sb.from('produtos').update({ ativo: alternar.dataset.ativo !== 'true' })
+        .eq('id', alternar.dataset.alternar);
+      carregar();
+      return;
+    }
+
+    if (mexer) {
+      alvo = produtos.find(p => p.id === mexer.dataset.mexer);
+      if (!alvo) return;
+      el('j-titulo').textContent = alvo.nome;
+      el('j-atual').textContent = 'Estoque atual: ' + alvo.estoque + ' unidades.';
+      el('j-qtd').value = 1;
+      el('j-motivo').value = '';
+      el('j-aviso').className = 'aviso';
+      janela.hidden = false;
+    }
+  });
+
+  el('j-tipo').addEventListener('change', () => {
+    const textos = {
+      entrada: 'Quantas unidades entraram.',
+      saida: 'Quantas unidades saíram sem venda.',
+      ajuste: 'Digite a contagem real. O estoque passa a ser esse número.'
+    };
+    el('j-dica').textContent = textos[el('j-tipo').value];
+  });
+
+  el('j-salvar').addEventListener('click', async () => {
+    if (!alvo) return;
+    const tipo = el('j-tipo').value;
+    const qtd = Number(el('j-qtd').value);
+
+    if (!Number.isFinite(qtd) || qtd < 0) {
+      dizer('j-aviso', 'Quantidade inválida.');
+      return;
+    }
+
+    const novo = tipo === 'entrada' ? alvo.estoque + qtd
+               : tipo === 'saida'   ? alvo.estoque - qtd
+               : qtd;
+
+    const diferenca = novo - alvo.estoque;
+
+    el('j-salvar').disabled = true;
+
+    const { error } = await sb.from('produtos').update({ estoque: novo }).eq('id', alvo.id);
+
+    if (!error) {
+      await sb.from('movimentos_estoque').insert({
+        produto_id: alvo.id,
+        tipo,
+        quantidade: diferenca,
+        motivo: el('j-motivo').value.trim() || null
+      });
+    }
+
+    el('j-salvar').disabled = false;
+
+    if (error) return dizer('j-aviso', 'Não foi possível salvar: ' + error.message);
+
+    janela.hidden = true;
+    alvo = null;
+    carregar();
+  });
+
+  const fechar = () => { janela.hidden = true; alvo = null; };
+  document.getElementById('fechar').addEventListener('click', fechar);
+  document.getElementById('j-cancelar').addEventListener('click', fechar);
+  janela.addEventListener('click', (e) => { if (e.target === janela) fechar(); });
+
+  carregar();
+}
+</script>
+
+</body>
+</html>

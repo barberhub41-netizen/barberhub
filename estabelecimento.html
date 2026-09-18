@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Minha barbearia — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -96,6 +99,15 @@
           </div>
 
           <div class="campo">
+            <label for="base_comissao">Comissão calculada sobre</label>
+            <select id="base_comissao">
+              <option value="cobrado">O que o cliente pagou</option>
+              <option value="tabela">O preço de tabela</option>
+            </select>
+            <p class="dica">Muda o resultado quando há plano ou desconto.</p>
+          </div>
+
+          <div class="campo">
             <label for="status">Situação</label>
             <select id="status">
               <option value="rascunho">Rascunho — só você vê</option>
@@ -130,7 +142,7 @@ const aviso  = document.getElementById('aviso');
 const salvar = document.getElementById('salvar');
 const ver    = document.getElementById('ver');
 
-const campos = ['nome','apelido_unidade','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','intervalo_min','status'];
+const campos = ['nome','apelido_unidade','descricao','telefone','cep','logradouro','numero','bairro','cidade','uf','intervalo_min','base_comissao','status'];
 let coordenadas = { latitude: null, longitude: null };
 const el = (id) => document.getElementById(id);
 

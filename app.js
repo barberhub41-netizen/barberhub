@@ -1,7 +1,7 @@
 // ============================================================
 // BarberHub — funções compartilhadas pelas páginas
 // ============================================================
-import { sb } from './config.js';
+import { sb, VAPID_PUBLICA } from './config.js';
 
 export { sb };
 
@@ -51,6 +51,12 @@ export async function montarTopo(atual = '') {
     const perfil = await meuPerfil(sessao);
     const nome = (perfil?.nome || sessao.user.email).split(' ')[0];
     direita =
+      '<button class="sino" id="sino" aria-label="Avisos">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8z"/>' +
+        '<path d="M10.3 20a2 2 0 0 0 3.4 0"/></svg>' +
+        '<span class="contador" id="contador" hidden>0</span>' +
+      '</button>' +
       '<a class="btn btn-outline btn-sm" href="meus-agendamentos.html">Agendamentos</a>' +
       '<a class="btn btn-solid btn-sm" href="perfil.html">' + escapar(nome) + '</a>';
   } else {
@@ -117,8 +123,10 @@ export function apelido(nome = '') {
 export function subnav(atual) {
   const itens = [
     ['agenda.html',          'Agenda'],
+    ['comandas.html',        'Comandas'],
     ['estabelecimento.html', 'Dados'],
     ['servicos.html',        'Serviços'],
+    ['produtos.html',        'Produtos'],
     ['barbeiros.html',       'Equipe'],
     ['jornadas.html',        'Horários'],
     ['fotos.html',           'Fotos'],
@@ -136,7 +144,7 @@ export function subnav(atual) {
 export async function minhasBarbearias(sessao) {
   const { data } = await sb
     .from('estabelecimentos')
-    .select('id, nome, apelido_unidade, matriz_id, slug, cidade, status, intervalo_min, logo_caminho')
+    .select('id, nome, apelido_unidade, matriz_id, slug, cidade, status, intervalo_min, logo_caminho, base_comissao')
     .eq('dono_id', sessao.user.id)
     .order('matriz_id', { nullsFirst: true })
     .order('nome');
@@ -422,4 +430,169 @@ export async function buscarCep(cep) {
   } catch (e) {
     return null;
   }
+}
+
+export const PAGAMENTOS = {
+  dinheiro: 'Dinheiro', pix: 'Pix', credito: 'Crédito',
+  debito: 'Débito', plano: 'Plano/assinatura', cortesia: 'Cortesia', outro: 'Outro'
+};
+
+// Quanto de comissão cabe num item.
+// base 'tabela' calcula sobre o preço cheio; 'cobrado', sobre o que
+// o cliente pagou — muda o resultado quando há plano ou desconto.
+export function calcularComissao({ pct, precoCheio, precoCobrado, base }) {
+  const p = Number(pct) || 0;
+  if (!p) return 0;
+  const alvo = base === 'tabela' ? precoCheio : precoCobrado;
+  return Math.round((alvo * p) / 100);
+}
+
+
+// ============================================================
+// Aplicativo instalável e notificação push
+// ============================================================
+
+// Registra o service worker, que é quem recebe o push com o
+// site fechado. Falha em silêncio se o navegador não suportar.
+export async function ligarServiceWorker() {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    return await navigator.serviceWorker.register('./sw.js', { scope: './' });
+  } catch (e) {
+    console.warn('Service worker não registrou:', e);
+    return null;
+  }
+}
+
+export function pushDisponivel() {
+  return 'serviceWorker' in navigator &&
+         'PushManager' in window &&
+         'Notification' in window &&
+         VAPID_PUBLICA && !VAPID_PUBLICA.startsWith('COLE_AQUI');
+}
+
+// O navegador entrega a chave em base64url; a API quer bytes.
+function chaveParaBytes(base64) {
+  const preenchido = (base64 + '='.repeat((4 - base64.length % 4) % 4))
+    .replace(/-/g, '+').replace(/_/g, '/');
+  const cru = atob(preenchido);
+  return Uint8Array.from([...cru].map(c => c.charCodeAt(0)));
+}
+
+function paraBase64(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+}
+
+export async function estadoPush() {
+  if (!pushDisponivel()) return 'indisponivel';
+  if (Notification.permission === 'denied') return 'bloqueado';
+  const reg = await navigator.serviceWorker.ready;
+  const inscricao = await reg.pushManager.getSubscription();
+  return inscricao ? 'ligado' : 'desligado';
+}
+
+export async function ativarPush(sessao) {
+  if (!pushDisponivel()) throw new Error('Este navegador não aceita notificações.');
+
+  const permissao = await Notification.requestPermission();
+  if (permissao !== 'granted') {
+    throw new Error('Você recusou as notificações. Para liberar, mude nas permissões do site.');
+  }
+
+  await ligarServiceWorker();
+  const reg = await navigator.serviceWorker.ready;
+
+  let inscricao = await reg.pushManager.getSubscription();
+  if (!inscricao) {
+    inscricao = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: chaveParaBytes(VAPID_PUBLICA)
+    });
+  }
+
+  const dados = inscricao.toJSON();
+  const { error } = await sb.from('push_assinaturas').upsert({
+    perfil_id: sessao.user.id,
+    endpoint: inscricao.endpoint,
+    p256dh: dados.keys.p256dh,
+    auth: dados.keys.auth,
+    aparelho: navigator.userAgent.slice(0, 120)
+  }, { onConflict: 'endpoint' });
+
+  if (error) throw new Error('Não foi possível guardar a inscrição: ' + error.message);
+  return true;
+}
+
+export async function desativarPush() {
+  const reg = await navigator.serviceWorker.ready;
+  const inscricao = await reg.pushManager.getSubscription();
+  if (!inscricao) return;
+  await sb.from('push_assinaturas').delete().eq('endpoint', inscricao.endpoint);
+  await inscricao.unsubscribe();
+}
+
+// registra o service worker assim que a página carrega
+ligarServiceWorker();
+
+// ============================================================
+// Adicionar ao calendário
+// Google Agenda por link; iPhone e o resto por arquivo .ics,
+// que é o formato que todo calendário entende.
+// ============================================================
+
+function carimbo(data) {
+  return new Date(data).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+export function linkGoogleAgenda({ titulo, inicio, fim, local, descricao }) {
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: titulo,
+    dates: carimbo(inicio) + '/' + carimbo(fim),
+    details: descricao || '',
+    location: local || ''
+  });
+  return 'https://calendar.google.com/calendar/render?' + p.toString();
+}
+
+export function montarIcs({ titulo, inicio, fim, local, descricao, id }) {
+  // o padrão exige quebra de linha CRLF e escape em vírgula e ponto e vírgula
+  const limpar = (t = '') => String(t)
+    .replace(/\\/g, '\\\\').replace(/;/g, '\\;')
+    .replace(/,/g, '\\,').replace(/\n/g, '\\n');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//BarberHub//PT-BR//',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    'UID:' + (id || Date.now()) + '@barberhub',
+    'DTSTAMP:' + carimbo(new Date()),
+    'DTSTART:' + carimbo(inicio),
+    'DTEND:' + carimbo(fim),
+    'SUMMARY:' + limpar(titulo),
+    'DESCRIPTION:' + limpar(descricao),
+    'LOCATION:' + limpar(local),
+    'BEGIN:VALARM',
+    'TRIGGER:-PT2H',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:' + limpar(titulo),
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
+export function baixarIcs(evento, nomeArquivo = 'agendamento.ics') {
+  const blob = new Blob([montarIcs(evento)], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
