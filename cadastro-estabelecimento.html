@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cadastrar barbearia — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="acesso">
+  <div class="caixa" style="width:min(560px,calc(100% - 32px))">
+    <h1>Cadastrar barbearia</h1>
+    <p class="legenda">Sua conta e a barbearia, de uma vez. Leva dois minutos.</p>
+
+    <form id="form" novalidate>
+      <h2 class="secao-titulo" style="margin-top:26px">Quem é você</h2>
+
+      <div class="form-grid">
+        <div class="campo larga" style="margin-top:0">
+          <label for="nome">Seu nome</label>
+          <input id="nome" type="text" autocomplete="name" placeholder="Como quer ser chamado" required />
+        </div>
+        <div class="campo">
+          <label for="cpf">Seu CPF</label>
+          <input id="cpf" type="text" inputmode="numeric" placeholder="000.000.000-00" required />
+        </div>
+        <div class="campo">
+          <label for="telefone">Seu telefone</label>
+          <input id="telefone" type="tel" autocomplete="tel" placeholder="(41) 90000-0000" />
+        </div>
+        <div class="campo larga">
+          <label for="email">E-mail de acesso</label>
+          <input id="email" type="email" autocomplete="email" placeholder="voce@email.com" required />
+        </div>
+        <div class="campo larga">
+          <label for="senha">Senha</label>
+          <input id="senha" type="password" autocomplete="new-password" placeholder="Mínimo de 6 caracteres" minlength="6" required />
+        </div>
+      </div>
+
+      <h2 class="secao-titulo" style="margin-top:30px">A barbearia</h2>
+
+      <div class="form-grid">
+        <div class="campo larga" style="margin-top:0">
+          <label for="estab">Nome do estabelecimento</label>
+          <input id="estab" type="text" placeholder="Barbearia do Zé" required />
+        </div>
+        <div class="campo">
+          <label for="cidade">Cidade</label>
+          <input id="cidade" type="text" placeholder="Curitiba" required />
+        </div>
+        <div class="campo">
+          <label for="uf">Estado</label>
+          <input id="uf" type="text" placeholder="PR" maxlength="2" required />
+        </div>
+      </div>
+
+      <p class="legenda" style="margin-top:16px;font-size:13px">
+        O endereço completo, serviços, equipe e horários você preenche depois, no painel.
+        Sua barbearia nasce como rascunho: ninguém a encontra até você liberar.
+      </p>
+
+      <button class="btn btn-solid" type="submit" id="botao">Criar conta e barbearia</button>
+    </form>
+
+    <div class="aviso" id="aviso" role="status"></div>
+
+    <p class="rodape-caixa">Já tem conta? <a href="entrar.html">Entrar</a></p>
+    <p class="rodape-caixa" style="margin-top:8px">É cliente? <a href="cadastro.html">Criar conta de cliente</a></p>
+    <a class="voltar" href="para-estabelecimentos.html">← Como funciona</a>
+  </div>
+</main>
+
+<script type="module">
+import { sb, mascaraCpf, cpfValido, soDigitos, apelido, montarTopo } from './app.js';
+import { traduzErro } from './config.js';
+
+montarTopo('estabelecimento');
+
+const el = (id) => document.getElementById(id);
+const aviso = el('aviso');
+const botao = el('botao');
+
+mascaraCpf(el('cpf'));
+
+const dizer = (t, tipo = 'erro') => { aviso.textContent = t; aviso.className = 'aviso ' + tipo; };
+const soltar = (t) => {
+  dizer(t);
+  botao.disabled = false;
+  botao.textContent = 'Criar conta e barbearia';
+};
+
+// já logado? vai direto para o painel
+const { data: { session } } = await sb.auth.getSession();
+if (session) location.replace('estabelecimento.html');
+
+el('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const nome  = el('nome').value.trim();
+  const email = el('email').value.trim();
+  const senha = el('senha').value;
+  const estab = el('estab').value.trim();
+  const cidade = el('cidade').value.trim();
+  const uf = el('uf').value.trim().toUpperCase();
+
+  if (!nome)  return dizer('Informe seu nome.');
+  if (!cpfValido(el('cpf').value)) return dizer('CPF inválido. Confira os números.');
+  if (!email) return dizer('Informe o e-mail.');
+  if (senha.length < 6) return dizer('A senha precisa ter pelo menos 6 caracteres.');
+  if (!estab) return dizer('Informe o nome da barbearia.');
+  if (!cidade) return dizer('Informe a cidade.');
+  if (uf.length !== 2) return dizer('O estado deve ter duas letras, como PR.');
+
+  botao.disabled = true;
+  botao.textContent = 'Criando...';
+
+  const digitos = soDigitos(el('cpf').value);
+
+  // 1. o CPF está livre?
+  const { data: disponivel, error: erroCpf } = await sb.rpc('cpf_disponivel', { p_cpf: digitos });
+  if (erroCpf || !disponivel?.ok) {
+    return soltar(disponivel?.motivo || 'Não foi possível conferir o CPF.');
+  }
+
+  // 2. cria a conta
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: senha,
+    options: { data: { nome, telefone: el('telefone').value.trim(), cpf: digitos } }
+  });
+
+  if (error) return soltar(traduzErro(error.message));
+
+  // sem sessão significa que a confirmação de e-mail está ligada
+  if (!data.session) {
+    dizer('Conta criada. Confirme o e-mail que enviamos e depois entre para ' +
+          'terminar o cadastro da barbearia.', 'ok');
+    botao.textContent = 'Conta criada';
+    return;
+  }
+
+  // 3. cria a barbearia, já ligada a essa conta
+  const { error: erroEstab } = await sb.from('estabelecimentos').insert({
+    dono_id: data.session.user.id,
+    nome: estab,
+    slug: apelido(estab) + '-' + Math.random().toString(36).slice(2, 7),
+    cidade,
+    uf,
+    status: 'rascunho'
+  });
+
+  if (erroEstab) {
+    return soltar('A conta foi criada, mas a barbearia não: ' + erroEstab.message +
+                  '. Entre e cadastre pelo painel.');
+  }
+
+  location.href = 'estabelecimento.html';
+});
+</script>
+
+</body>
+</html>

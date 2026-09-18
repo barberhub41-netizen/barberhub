@@ -67,8 +67,17 @@ export async function montarTopo(atual = '') {
   const marca = (p) => atual === p ? ' class="on"' : '';
 
   let direita;
+  let meuPapel = 'visitante';
+
   if (sessao) {
     const perfil = await meuPerfil(sessao);
+
+    // dono de estabelecimento? barbeiro? cliente comum?
+    const { count } = await sb.from('estabelecimentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('dono_id', sessao.user.id);
+
+    meuPapel = count ? 'dono' : (perfil?.papel === 'barbeiro' ? 'barbeiro' : 'cliente');
     const nome = (perfil?.nome || sessao.user.email).split(' ')[0];
     direita =
       '<button class="sino" id="sino" aria-label="Avisos">' +
@@ -84,8 +93,15 @@ export async function montarTopo(atual = '') {
   } else {
     direita =
       '<a class="btn btn-outline btn-sm" href="entrar.html">Entrar</a>' +
-      '<a class="btn btn-solid btn-sm" href="cadastro.html">Criar conta</a>';
+      '<a class="btn btn-solid btn-sm" href="criar-conta.html">Criar conta</a>';
   }
+
+  // o segundo item do menu muda conforme o papel
+  const segundoItem =
+    meuPapel === 'dono'     ? '<a href="agenda.html"' + marca('estabelecimento') + '>Meu painel</a>'
+  : meuPapel === 'barbeiro' ? '<a href="minha-agenda.html"' + marca('estabelecimento') + '>Minha agenda</a>'
+  : meuPapel === 'cliente'  ? '<a href="cadastro-estabelecimento.html"' + marca('estabelecimento') + '>Tenho uma barbearia</a>'
+  :                           '<a href="para-estabelecimentos.html"' + marca('estabelecimento') + '>Sou estabelecimento</a>';
 
   topo.innerHTML =
     '<div class="wrap top-in">' +
@@ -93,7 +109,7 @@ export async function montarTopo(atual = '') {
       '<span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span></a>' +
       '<nav class="menu">' +
         '<a href="buscar.html"' + marca('buscar') + '>Barbearias</a>' +
-        '<a href="para-estabelecimentos.html"' + marca('estabelecimento') + '>Sou estabelecimento</a>' +
+        segundoItem +
       '</nav>' +
       '<div class="top-cta">' + direita + '</div>' +
     '</div>';

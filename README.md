@@ -33,6 +33,8 @@ nova-senha.html            definição da nova senha
 completar.html             completa o cadastro de quem entrou pelo Google
 perfil.html                perfil do cliente e favoritas
 cadastro.html              criação de conta de cliente (nome, CPF, e-mail, senha)
+criar-conta.html           escolha entre conta de cliente e de estabelecimento
+cadastro-estabelecimento.html  conta e barbearia numa tela só
 meus-agendamentos.html     agendamentos do cliente, com cancelamento
 estabelecimento.html       cadastro e edição da barbearia
 app.js                     funções compartilhadas (sessão, topo, formatação)
@@ -223,7 +225,15 @@ Existe **um cadastro só**: a conta de pessoa. O que muda é o vínculo.
 | Tem `perfil_id` numa linha de `barbeiros` | `minha-agenda.html`: a própria agenda e a própria comissão |
 | `perfis.papel = 'admin'` | tudo, pelas políticas de RLS |
 
-O dono cria o acesso do profissional em Equipe → Criar acesso. A Edge
+Há dois caminhos de cadastro, que levam à mesma tabela de contas:
+`cadastro.html` para quem vai marcar horário e
+`cadastro-estabelecimento.html`, que cria a conta e a barbearia juntas.
+
+O menu do topo muda conforme o papel: quem tem barbearia vê "Meu painel",
+o profissional vê "Minha agenda", e o cliente vê "Tenho uma barbearia".
+
+O dono cria o acesso do profissional em Equipe → Criar acesso, escolhendo
+o e-mail e a senha. A Edge
 Function `criar-barbeiro` cria a conta com uma senha temporária, mostrada
 uma única vez. Se a pessoa já tiver conta, ela é apenas ligada ao perfil.
 

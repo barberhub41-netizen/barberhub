@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Criar conta — BarberHub</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#d86b3f" />
+<link rel="apple-touch-icon" href="icone-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+<header class="top" id="topo"></header>
+
+<main class="acesso">
+  <div class="caixa" style="width:min(620px,calc(100% - 32px))">
+    <h1>Criar conta</h1>
+    <p class="legenda">Para que você vai usar o BarberHub?</p>
+
+    <div class="escolhas" style="margin-top:28px">
+      <a class="caminho" href="cadastro.html">
+        <span class="caminho-icone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+        </span>
+        <span class="caminho-texto">
+          <b>Quero marcar horário</b>
+          <small>Conta de cliente. Busque barbearias, agende, avalie e guarde as favoritas.</small>
+        </span>
+        <span class="caminho-seta">→</span>
+      </a>
+
+      <a class="caminho" href="cadastro-estabelecimento.html">
+        <span class="caminho-icone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>
+        </span>
+        <span class="caminho-texto">
+          <b>Tenho uma barbearia</b>
+          <small>Conta de estabelecimento. Agenda da equipe, serviços, comandas e relatórios.</small>
+        </span>
+        <span class="caminho-seta">→</span>
+      </a>
+    </div>
+
+    <p class="legenda" style="margin-top:22px;font-size:13px">
+      Dá para ser os dois: quem tem barbearia também marca horário em outra.
+      Se estiver na dúvida, comece como cliente — depois é só cadastrar o estabelecimento.
+    </p>
+
+    <p class="rodape-caixa">Já tem conta? <a href="entrar.html">Entrar</a></p>
+    <a class="voltar" href="index.html">← Voltar para o início</a>
+  </div>
+</main>
+
+<script type="module">
+import { montarTopo, sb } from './app.js';
+montarTopo('');
+
+// já entrou? não precisa criar nada
+const { data: { session } } = await sb.auth.getSession();
+if (session) location.replace('meus-agendamentos.html');
+</script>
+
+</body>
+</html>

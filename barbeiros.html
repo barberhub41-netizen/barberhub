@@ -25,6 +25,33 @@
   </div>
 </main>
 
+<div class="janela" id="janela-acesso" hidden>
+  <div class="janela-caixa">
+    <button class="fechar" id="a-fechar" aria-label="Fechar">×</button>
+    <h2>Criar acesso</h2>
+    <p class="legenda" id="a-quem"></p>
+
+    <div class="campo">
+      <label for="a-email">E-mail do profissional</label>
+      <input id="a-email" type="email" placeholder="jose@email.com" autocomplete="off" />
+      <p class="dica">É com ele que a pessoa vai entrar.</p>
+    </div>
+
+    <div class="campo">
+      <label for="a-senha">Senha</label>
+      <input id="a-senha" type="text" placeholder="Mínimo de 6 caracteres" autocomplete="off" />
+      <p class="dica">Combine com o profissional e peça para ele trocar depois.</p>
+    </div>
+
+    <div class="aviso" id="a-aviso" role="status"></div>
+
+    <div class="acoes">
+      <button class="btn btn-solid" id="a-criar">Criar acesso</button>
+      <button class="btn btn-outline" id="a-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <template id="modelo">
   <div class="painel" style="max-width:860px">
     <form id="novo">
@@ -133,50 +160,7 @@ function iniciar() {
   lista.addEventListener('click', async (e) => {
     const acesso = e.target.closest('[data-acesso]');
     if (acesso) {
-      const email = prompt(
-        'E-mail de acesso para ' + acesso.dataset.nome + '.\n\n' +
-        'O sistema cria a conta e mostra uma senha temporária. ' +
-        'Se a pessoa já tiver conta no BarberHub, ela é só ligada ao perfil.');
-      if (!email) return;
-
-      acesso.disabled = true;
-      acesso.textContent = 'Criando...';
-
-      const { data: { session } } = await sb.auth.getSession();
-      const resposta = await fetch(SUPABASE_URL + '/functions/v1/criar-barbeiro', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + session.access_token
-        },
-        body: JSON.stringify({
-          barbeiro_id: acesso.dataset.acesso,
-          email: email.trim(),
-          nome: acesso.dataset.nome
-        })
-      });
-
-      const r = await resposta.json().catch(() => ({}));
-
-      acesso.disabled = false;
-      acesso.textContent = 'Criar acesso';
-
-      if (!resposta.ok || r.erro) {
-        alert('Não foi possível: ' + (r.erro || resposta.status));
-        return;
-      }
-
-      if (r.ja_tinha_conta) {
-        alert('Essa pessoa já tinha conta no BarberHub. O acesso foi ligado ao perfil dela — ' +
-              'ela entra com a senha que já usa.');
-      } else {
-        alert('Acesso criado.\n\n' +
-              'E-mail: ' + r.email + '\n' +
-              'Senha temporária: ' + r.senha + '\n\n' +
-              'Anote agora: esta senha não aparece de novo. ' +
-              'Peça para a pessoa trocar no primeiro acesso.');
-      }
-      carregar();
+      abrirAcesso(acesso.dataset.acesso, acesso.dataset.nome);
       return;
     }
 
@@ -241,6 +225,92 @@ function iniciar() {
       }
       carregar();
     }
+  });
+
+  // ----------------------------------------------------------
+  // Criar acesso do profissional
+  // ----------------------------------------------------------
+  const janela = document.getElementById('janela-acesso');
+  const aAviso = document.getElementById('a-aviso');
+  let alvoAcesso = null;
+
+  function abrirAcesso(id, nome) {
+    alvoAcesso = id;
+    document.getElementById('a-quem').textContent =
+      'O login é de ' + nome + '. Ele vai enxergar só a agenda dele.';
+    document.getElementById('a-email').value = '';
+    document.getElementById('a-senha').value = '';
+    aAviso.className = 'aviso';
+    janela.hidden = false;
+  }
+
+  const fecharAcesso = () => { janela.hidden = true; alvoAcesso = null; };
+  document.getElementById('a-fechar').addEventListener('click', fecharAcesso);
+  document.getElementById('a-cancelar').addEventListener('click', fecharAcesso);
+  janela.addEventListener('click', (e) => { if (e.target === janela) fecharAcesso(); });
+
+  document.getElementById('a-criar').addEventListener('click', async () => {
+    if (!alvoAcesso) return;
+
+    const email = document.getElementById('a-email').value.trim();
+    const senha = document.getElementById('a-senha').value;
+    const botao = document.getElementById('a-criar');
+
+    const falhar = (t) => { aAviso.textContent = t; aAviso.className = 'aviso erro';
+                            botao.disabled = false; botao.textContent = 'Criar acesso'; };
+
+    if (!email.includes('@')) return falhar('Informe um e-mail válido.');
+    if (senha && senha.length < 6) return falhar('A senha precisa ter pelo menos 6 caracteres.');
+
+    botao.disabled = true;
+    botao.textContent = 'Criando...';
+
+    let resposta, r;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      resposta = await fetch(SUPABASE_URL + '/functions/v1/criar-barbeiro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + session.access_token
+        },
+        body: JSON.stringify({
+          barbeiro_id: alvoAcesso,
+          email,
+          senha: senha || undefined,
+          nome: document.getElementById('a-quem').textContent
+        })
+      });
+      r = await resposta.json().catch(() => ({}));
+    } catch (erro) {
+      return falhar('Não foi possível falar com o servidor. ' +
+                    'A função criar-barbeiro já foi publicada no Supabase?');
+    }
+
+    if (resposta.status === 404) {
+      return falhar('A função criar-barbeiro não está publicada no Supabase.');
+    }
+
+    if (!resposta.ok || r.erro) {
+      return falhar(r.erro || ('Erro ' + resposta.status));
+    }
+
+    botao.disabled = false;
+    botao.textContent = 'Criar acesso';
+    fecharAcesso();
+
+    if (r.ja_tinha_conta) {
+      alert('Essa pessoa já tinha conta no BarberHub. O acesso foi ligado ao perfil dela — ' +
+            'ela entra com a senha que já usa.');
+    } else {
+      alert('Acesso criado.\n\n' +
+            'E-mail: ' + r.email + '\n' +
+            'Senha: ' + r.senha + '\n\n' +
+            (r.definida_por_voce ? '' : 'Anote: esta senha não aparece de novo.\n') +
+            'Peça para a pessoa trocar no primeiro acesso.');
+    }
+
+    carregar();
   });
 
   carregar();

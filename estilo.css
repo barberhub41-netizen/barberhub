@@ -511,3 +511,16 @@ input[type=file]::file-selector-button{background:var(--orange);color:#161513;bo
 .instalar b{display:block;font-size:16px;font-weight:600}
 .instalar p{color:var(--muted);font-size:14px;margin-top:5px;line-height:1.6}
 .instalar .btn{white-space:nowrap}
+
+/* ============================================================
+   Escolha do tipo de conta
+   ============================================================ */
+.caminho{display:flex;align-items:center;gap:16px;border:1px solid var(--line-2);border-radius:12px;padding:20px;transition:.16s;background:rgba(255,255,255,.02)}
+.caminho:hover{border-color:var(--orange);background:var(--orange-soft);transform:translateY(-2px)}
+.caminho-icone{width:48px;height:48px;border-radius:12px;background:var(--orange-soft);color:var(--orange);display:grid;place-items:center;flex-shrink:0}
+.caminho-icone svg{width:23px;height:23px}
+.caminho-texto{flex:1;min-width:0}
+.caminho-texto b{display:block;font-size:16.5px;font-weight:600}
+.caminho-texto small{display:block;color:var(--muted);font-size:13.5px;margin-top:4px;line-height:1.55}
+.caminho-seta{color:var(--dim);font-size:20px;flex-shrink:0}
+.caminho:hover .caminho-seta{color:var(--orange)}

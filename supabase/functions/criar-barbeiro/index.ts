@@ -24,7 +24,7 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-// Senha temporária legível: duas sílabas e quatro números.
+// Senha temporária legível, usada quando o dono não define uma.
 function senhaTemporaria() {
   const partes = ['bar', 'cor', 'tes', 'lam', 'pen', 'nav', 'fio', 'tom'];
   const p = () => partes[Math.floor(Math.random() * partes.length)];
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const autorizacao = req.headers.get('Authorization') ?? '';
     if (!autorizacao) return responder({ erro: 'Sem autorização.' }, 401);
 
-    const { barbeiro_id, email, nome } = await req.json();
+    const { barbeiro_id, email, nome, senha: senhaEscolhida } = await req.json();
     if (!barbeiro_id || !email) {
       return responder({ erro: 'Faltou barbeiro_id ou email.' }, 400);
     }
@@ -82,7 +82,9 @@ Deno.serve(async (req) => {
     // 2. Com a chave administrativa, cria a conta.
     const admin = createClient(URL_PROJETO, CHAVE_ADMIN);
     const limpo = String(email).trim().toLowerCase();
-    const senha = senhaTemporaria();
+    const senha = (typeof senhaEscolhida === 'string' && senhaEscolhida.length >= 6)
+      ? senhaEscolhida
+      : senhaTemporaria();
 
     const { data: criado, error: erroCriar } = await admin.auth.admin.createUser({
       email: limpo,
@@ -114,7 +116,7 @@ Deno.serve(async (req) => {
       .update({ papel: 'barbeiro' })
       .eq('id', criado.user.id);
 
-    return responder({ ok: true, email: limpo, senha });
+    return responder({ ok: true, email: limpo, senha, definida_por_voce: senha === senhaEscolhida });
 
   } catch (e) {
     console.error(e);

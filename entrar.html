@@ -23,13 +23,13 @@
       <span><b>Barber<i>Hub</i></b><small>Para todos os estilos</small></span>
     </a>
     <div class="top-cta">
-      <a class="btn btn-solid btn-sm" href="cadastro.html">Criar conta</a>
+      <a class="btn btn-solid btn-sm" href="criar-conta.html">Criar conta</a>
     </div>
   </div>
 </header>
 
 <main class="acesso">
-  <div class="caixa">
+  <div class="caixa" style="width:min(520px,calc(100% - 32px))">
     <h1>Entrar</h1>
     <p class="legenda">Acesse para ver e gerenciar seus agendamentos.</p>
 
@@ -59,7 +59,28 @@
     <div class="aviso" id="aviso" role="status"></div>
 
 
-    <p class="rodape-caixa">Não tem conta? <a href="cadastro.html">Criar conta</a></p>
+    <div class="divisor">não tem conta?</div>
+
+    <div class="escolhas">
+      <a class="caminho" href="cadastro.html" style="padding:15px">
+        <span class="caminho-icone" style="width:40px;height:40px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+        </span>
+        <span class="caminho-texto"><b>Criar conta de cliente</b>
+        <small>Para marcar horário</small></span>
+        <span class="caminho-seta">→</span>
+      </a>
+
+      <a class="caminho" href="cadastro-estabelecimento.html" style="padding:15px">
+        <span class="caminho-icone" style="width:40px;height:40px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></svg>
+        </span>
+        <span class="caminho-texto"><b>Cadastrar barbearia</b>
+        <small>Para receber agendamentos</small></span>
+        <span class="caminho-seta">→</span>
+      </a>
+    </div>
+
     <a class="voltar" href="index.html">← Voltar para o início</a>
   </div>
 </main>
